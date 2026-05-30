@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}股票列表{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-list me-2"></i>股票列表</span>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-primary active" onclick="filterStocks('all')">全部</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="filterStocks('hs300')">沪深300</button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="filterStocks('custom')">自选</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="stocksTable">
+                        <thead>
+                            <tr>
+                                <th>代码</th>
+                                <th>名称</th>
+                                <th>行业</th>
+                                <th>市场</th>
+                                <th>类型</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stocksTableBody">
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="loading">
+                                        <div class="loading-spinner"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentFilter = 'all';
+let allStocks = [];
+
+// 页面加载时获取股票列表
+document.addEventListener('DOMContentLoaded', function() {
+    loadStocks();
+});
+
+// 加载股票列表
+async function loadStocks() {
+    try {
+        const response = await axios.get('/api/stocks?type=all');
+        if (response.data.success) {
+            allStocks = response.data.data;
+            renderStocks(allStocks);
+        }
+    } catch (error) {
+        console.error('加载股票列表失败:', error);
+        document.getElementById('stocksTableBody').innerHTML = `
+            <tr><td colspan="6" class="text-center text-danger">加载失败，请刷新重试</td></tr>
+        `;
+    }
+}
+
+// 渲染股票列表
+function renderStocks(stocks) {
+    const tbody = document.getElementById('stocksTableBody');
+    
+    if (stocks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂无数据</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    stocks.forEach(stock => {
+        const typeBadge = stock.is_hs300 ? 
+            '<span class="badge bg-primary">沪深300</span>' : 
+            stock.is_custom ? '<span class="badge bg-warning">自选</span>' : '';
+        
+        html += `<tr>
+            <td><strong>${stock.ts_code}</strong></td>
+            <td>${stock.name}</td>
+            <td>${stock.industry || '-'}</td>
+            <td>${stock.market || '-'}</td>
+            <td>${typeBadge}</td>
+            <td>
+                <a href="/analysis/${stock.ts_code}" class="btn btn-sm btn-primary me-1">
+                    <i class="fas fa-chart-line"></i> 分析
+                </a>
+                ${!stock.is_custom ? 
+                    `<button class="btn btn-sm btn-outline-warning" onclick="addToCustom('${stock.ts_code}')">
+                        <i class="fas fa-star"></i> 自选
+                    </button>` :
+                    `<button class="btn btn-sm btn-outline-danger" onclick="removeFromCustom('${stock.ts_code}')">
+                        <i class="fas fa-trash"></i> 移除
+                    </button>`
+                }
+            </td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// 筛选股票
+function filterStocks(type) {
+    currentFilter = type;
+    
+    // 更新按钮状态
+    document.querySelectorAll('.btn-group .btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // 筛选数据
+    let filtered = allStocks;
+    if (type === 'hs300') {
+        filtered = allStocks.filter(s => s.is_hs300);
+    } else if (type === 'custom') {
+        filtered = allStocks.filter(s => s.is_custom);
+    }
+    
+    renderStocks(filtered);
+}
+
+// 添加到自选
+async function addToCustom(tsCode) {
+    try {
+        const response = await axios.post('/api/stocks/custom', { ts_code: tsCode });
+        if (response.data.success) {
+            alert('已添加到自选');
+            loadStocks(); // 刷新列表
+        } else {
+            alert(response.data.error || '添加失败');
+        }
+    } catch (error) {
+        console.error('添加自选失败:', error);
+        alert('添加失败，请重试');
+    }
+}
+
+// 从自选移除
+async function removeFromCustom(tsCode) {
+    if (!confirm('确定从自选移除？')) return;
+    
+    try {
+        const response = await axios.delete(`/api/stocks/custom/${tsCode}`);
+        if (response.data.success) {
+            alert('已从自选移除');
+            loadStocks(); // 刷新列表
+        } else {
+            alert(response.data.error || '移除失败');
+        }
+    } catch (error) {
+        console.error('移除自选失败:', error);
+        alert('移除失败，请重试');
+    }
+}
+</script>
+{% endblock %}

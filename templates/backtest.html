@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}策略回测{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-flask me-2"></i>策略回测
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">股票代码</label>
+                        <input type="text" class="form-control" id="tsCodeInput" placeholder="如：000001.SZ">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">策略</label>
+                        <select class="form-select" id="strategySelect">
+                            <option value="turtle_trading">海龟交易法则</option>
+                            <option value="golden_cross">均线金叉</option>
+                            <option value="macd_divergence">MACD策略</option>
+                            <option value="rsi_reversal">RSI反转</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">操作</label>
+                        <div class="d-grid">
+                            <button class="btn btn-primary" onclick="runBacktest()">
+                                <i class="fas fa-play me-2"></i>开始回测
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">对比</label>
+                        <div class="d-grid">
+                            <button class="btn btn-outline-primary" onclick="compareStrategies()">
+                                <i class="fas fa-balance-scale me-2"></i>对比
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 回测结果 -->
+<div class="row" id="backtestResults" style="display: none;">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie me-2"></i>回测指标
+            </div>
+            <div class="card-body" id="metricsSection">
+                <!-- 动态填充 -->
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i>资金曲线
+            </div>
+            <div class="card-body">
+                <div id="equityCurve" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 策略对比结果 -->
+<div class="row" id="comparisonResults" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-balance-scale me-2"></i>策略对比
+            </div>
+            <div class="card-body">
+                <div id="comparisonChart" class="chart-container"></div>
+                <div class="table-responsive mt-4">
+                    <table class="table table-hover" id="comparisonTable">
+                        <thead>
+                            <tr>
+                                <th>策略</th>
+                                <th>总收益率</th>
+                                <th>胜率</th>
+                                <th>最大回撤</th>
+                                <th>交易次数</th>
+                                <th>盈亏比</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparisonTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 交易记录 -->
+<div class="row mt-4" id="tradesSection" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-list me-2"></i>交易记录
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>类型</th>
+                                <th>价格</th>
+                                <th>仓位</th>
+                                <th>盈亏</th>
+                                <th>资金</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tradesTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 运行回测
+async function runBacktest() {
+    const tsCode = document.getElementById('tsCodeInput').value.trim();
+    const strategy = document.getElementById('strategySelect').value;
+    
+    if (!tsCode) {
+        alert('请输入股票代码');
+        return;
+    }
+    
+    // 显示加载状态
+    document.getElementById('backtestResults').style.display = 'flex';
+    document.getElementById('comparisonResults').style.display = 'none';
+    document.getElementById('tradesSection').style.display = 'block';
+    
+    document.getElementById('metricsSection').innerHTML = `
+        <div class="loading"><div class="loading-spinner"></div></div>
+    `;
+    
+    try {
+        const response = await axios.get(`/api/backtest/${tsCode}?strategy=${strategy}`);
+        if (response.data.success) {
+            displayBacktestResults(response.data.data);
+        } else {
+            alert(response.data.error || '回测失败');
+        }
+    } catch (error) {
+        console.error('回测失败:', error);
+        alert('回测失败，请检查股票代码');
+    }
+}
+
+// 显示回测结果
+function displayBacktestResults(result) {
+    if (result.error) {
+        document.getElementById('metricsSection').innerHTML = `
+            <div class="alert alert-warning">${result.error}</div>
+        `;
+        return;
+    }
+    
+    // 更新指标
+    const metricsHtml = `
+        <div class="row text-center">
+            <div class="col-6 mb-3">
+                <div class="stat-value ${result.total_return >= 0 ? 'text-success' : 'text-danger'}">
+                    ${result.total_return >= 0 ? '+' : ''}${result.total_return.toFixed(2)}%
+                </div>
+                <div class="stat-label">总收益率</div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="stat-value">${result.win_rate.toFixed(1)}%</div>
+                <div class="stat-label">胜率</div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="stat-value text-danger">${result.max_drawdown.toFixed(2)}%</div>
+                <div class="stat-label">最大回撤</div>
+            </div>
+            <div class="col-6 mb-3">
+                <div class="stat-value">${result.total_trades}</div>
+                <div class="stat-label">交易次数</div>
+            </div>
+            <div class="col-6">
+                <div class="stat-value">${result.profit_factor.toFixed(2)}</div>
+                <div class="stat-label">盈亏比</div>
+            </div>
+            <div class="col-6">
+                <div class="stat-value">${result.winning_trades}/${result.losing_trades}</div>
+                <div class="stat-label">盈亏次数</div>
+            </div>
+        </div>
+        <hr>
+        <div class="text-center">
+            <small class="text-muted">
+                初始资金: ¥${result.initial_capital.toLocaleString()}<br>
+                最终资金: ¥${result.final_capital.toLocaleString()}
+            </small>
+        </div>
+    `;
+    document.getElementById('metricsSection').innerHTML = metricsHtml;
+    
+    // 绘制资金曲线
+    renderEquityCurve(result.trades);
+    
+    // 显示交易记录
+    renderTrades(result.trades);
+}
+
+// 绘制资金曲线
+function renderEquityCurve(trades) {
+    if (!trades || trades.length === 0) return;
+    
+    const dates = [];
+    const capitals = [];
+    
+    trades.forEach(trade => {
+        dates.push(trade.date);
+        capitals.push(trade.capital);
+    });
+    
+    const trace = {
+        x: dates,
+        y: capitals,
+        type: 'scatter',
+        mode: 'lines',
+        name: '资金曲线',
+        line: { color: '#2563eb', width: 2 }
+    };
+    
+    const layout = {
+        title: '资金曲线',
+        xaxis: { title: '日期' },
+        yaxis: { title: '资金' },
+        height: 350
+    };
+    
+    Plotly.newPlot('equityCurve', [trace], layout, { responsive: true });
+}
+
+// 显示交易记录
+function renderTrades(trades) {
+    const tbody = document.getElementById('tradesTableBody');
+    
+    if (!trades || trades.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">无交易记录</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    trades.forEach(trade => {
+        const typeClass = trade.type === 'buy' ? 'text-success' : trade.type === 'sell' ? 'text-danger' : 'text-muted';
+        const typeText = trade.type === 'buy' ? '买入' : trade.type === 'sell' ? '卖出' : 
+                        trade.type === 'long_entry' ? '多头入场' : trade.type === 'long_exit' ? '多头出场' : trade.type;
+        const pnlClass = trade.pnl > 0 ? 'text-success' : trade.pnl < 0 ? 'text-danger' : '';
+        
+        html += `<tr>
+            <td>${trade.date}</td>
+            <td class="${typeClass}">${typeText}</td>
+            <td>¥${trade.price.toFixed(2)}</td>
+            <td>${trade.position || '-'}</td>
+            <td class="${pnlClass}">${trade.pnl ? (trade.pnl > 0 ? '+' : '') + trade.pnl.toFixed(2) : '-'}</td>
+            <td>¥${trade.capital.toLocaleString()}</td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// 对比策略
+async function compareStrategies() {
+    const tsCode = document.getElementById('tsCodeInput').value.trim();
+    
+    if (!tsCode) {
+        alert('请输入股票代码');
+        return;
+    }
+    
+    document.getElementById('comparisonResults').style.display = 'flex';
+    document.getElementById('backtestResults').style.display = 'none';
+    document.getElementById('tradesSection').style.display = 'none';
+    
+    document.getElementById('comparisonTableBody').innerHTML = `
+        <tr><td colspan="6" class="text-center"><div class="loading"><div class="loading-spinner"></div></div></td></tr>
+    `;
+    
+    try {
+        const response = await axios.get(`/api/backtest/compare/${tsCode}`);
+        if (response.data.success) {
+            displayComparisonResults(response.data.data);
+        } else {
+            alert(response.data.error || '对比失败');
+        }
+    } catch (error) {
+        console.error('策略对比失败:', error);
+        alert('对比失败，请检查股票代码');
+    }
+}
+
+// 显示对比结果
+function displayComparisonResults(data) {
+    const comparison = data.comparison;
+    
+    // 准备图表数据
+    const strategies = Object.keys(comparison);
+    const returns = strategies.map(s => comparison[s].total_return || 0);
+    const winRates = strategies.map(s => comparison[s].win_rate || 0);
+    const drawdowns = strategies.map(s => -(comparison[s].max_drawdown || 0));
+    
+    // 绘制对比图表
+    const trace1 = {
+        x: strategies,
+        y: returns,
+        name: '收益率(%)',
+        type: 'bar',
+        marker: { color: '#10b981' }
+    };
+    
+    const trace2 = {
+        x: strategies,
+        y: winRates,
+        name: '胜率(%)',
+        type: 'bar',
+        marker: { color: '#3b82f6' }
+    };
+    
+    const trace3 = {
+        x: strategies,
+        y: drawdowns,
+        name: '最大回撤(%)',
+        type: 'bar',
+        marker: { color: '#ef4444' }
+    };
+    
+    const layout = {
+        title: '策略对比',
+        barmode: 'group',
+        height: 400
+    };
+    
+    Plotly.newPlot('comparisonChart', [trace1, trace2, trace3], layout, { responsive: true });
+    
+    // 更新对比表格
+    const tbody = document.getElementById('comparisonTableBody');
+    let html = '';
+    
+    strategies.forEach(strategy => {
+        const result = comparison[strategy];
+        const returnClass = result.total_return >= 0 ? 'text-success' : 'text-danger';
+        
+        html += `<tr>
+            <td><strong>${strategy}</strong></td>
+            <td class="${returnClass}">${result.total_return >= 0 ? '+' : ''}${result.total_return.toFixed(2)}%</td>
+            <td>${result.win_rate.toFixed(1)}%</td>
+            <td class="text-danger">${result.max_drawdown.toFixed(2)}%</td>
+            <td>${result.total_trades}</td>
+            <td>${result.profit_factor.toFixed(2)}</td>
+        </tr>`;
+    });
+    
+    tbody.innerHTML = html;
+}
+</script>
+{% endblock %}

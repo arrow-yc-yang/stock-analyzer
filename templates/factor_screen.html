@@ -1,0 +1,598 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}多因子选股 - 股票分析系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .factor-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .factor-card .stat-value { font-size: 2rem; font-weight: 700; color: white; }
+    .factor-card .stat-label { color: rgba(255,255,255,0.85); font-size: 0.875rem; }
+
+    .score-bar { min-width: 80px; }
+    .score-excellent { color: #10b981; font-weight: 700; }
+    .score-good { color: #3b82f6; font-weight: 600; }
+    .score-medium { color: #f59e0b; font-weight: 600; }
+    .score-low { color: #ef4444; font-weight: 600; }
+
+    .filter-group { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; background: white; }
+    .filter-group label { font-weight: 600; color: #475569; font-size: 0.875rem; }
+
+    .table-hover tbody tr { cursor: pointer; transition: background-color 0.15s; }
+    .table-hover tbody tr:hover { background-color: #f1f5f9; }
+
+    .rank-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; border-radius: 50%; font-weight: 700; font-size: 0.8rem;
+    }
+    .rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: white; }
+    .rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); color: white; }
+    .rank-3 { background: linear-gradient(135deg, #d97706, #b45309); color: white; }
+    .rank-other { background: #e2e8f0; color: #64748b; }
+
+    .industry-tag {
+        display: inline-block; padding: 0.25rem 0.75rem; border-radius: 12px;
+        background: #e0e7ff; color: #4338ca; font-size: 0.8rem; font-weight: 500;
+    }
+
+    .factor-detail-panel {
+        display: none; position: fixed; top: 0; right: -450px; width: 450px; height: 100vh;
+        background: white; box-shadow: -4px 0 20px rgba(0,0,0,0.15); z-index: 1050;
+        transition: right 0.3s ease; overflow-y: auto; padding: 2rem;
+    }
+    .factor-detail-panel.show { right: 0; }
+    .factor-detail-overlay {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.3); z-index: 1049;
+    }
+    .factor-detail-overlay.show { display: block; }
+
+    .tab-btn { border-radius: 8px 8px 0 0; border: none; padding: 0.75rem 1.5rem; font-weight: 500; }
+    .tab-btn.active { background: white; color: #4338ca; border-bottom: 2px solid #4338ca; }
+    .tab-btn:not(.active) { background: #f1f5f9; color: #64748b; }
+
+    .sync-progress { display: none; }
+    .sync-progress.show { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0"><i class="fas fa-filter me-2"></i>多因子选股</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" onclick="showCorrelation()">
+                <i class="fas fa-project-diagram me-1"></i>因子相关性
+            </button>
+            <button class="btn btn-primary" id="syncBtn" onclick="syncFactorData()">
+                <i class="fas fa-sync-alt me-1"></i>同步数据
+            </button>
+        </div>
+    </div>
+
+    <!-- 同步进度 -->
+    <div class="sync-progress card mb-4" id="syncProgress">
+        <div class="card-body">
+            <div class="d-flex align-items-center gap-3">
+                <div class="loading-spinner"></div>
+                <div>
+                    <strong>正在同步因子数据...</strong>
+                    <p class="text-muted mb-0" id="syncStatus">获取基本面数据中，请稍候</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="factor-card">
+                <div class="stat-value" id="statTotal">-</div>
+                <div class="stat-label">数据日期</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="factor-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                <div class="stat-value" id="statScreened">-</div>
+                <div class="stat-label">筛选结果</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="factor-card" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                <div class="stat-value" id="statIndustries">-</div>
+                <div class="stat-label">覆盖行业</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="factor-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                <div class="stat-value" id="statAvgScore">-</div>
+                <div class="stat-label">平均得分</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 过滤条件 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-sliders-h me-2"></i>筛选条件
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">PE(TTM)上限</label>
+                    <input type="number" class="form-control" id="filterPeMax" placeholder="如: 50">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">PB上限</label>
+                    <input type="number" class="form-control" id="filterPbMax" placeholder="如: 5">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">ROE下限(%)</label>
+                    <input type="number" class="form-control" id="filterRoeMin" placeholder="如: 10">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">营收增速下限(%)</label>
+                    <input type="number" class="form-control" id="filterRevenueMin" placeholder="如: 10">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">行业</label>
+                    <select class="form-select" id="filterIndustry">
+                        <option value="">全部行业</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-primary w-100" onclick="screenStocks()">
+                        <i class="fas fa-search me-1"></i>筛选
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 排序和显示选项 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm tab-btn active" onclick="switchSort('composite_score', this)">综合评分</button>
+            <button class="btn btn-sm tab-btn" onclick="switchSort('value_score', this)">价值因子</button>
+            <button class="btn btn-sm tab-btn" onclick="switchSort('growth_score', this)">成长因子</button>
+            <button class="btn btn-sm tab-btn" onclick="switchSort('quality_score', this)">质量因子</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label class="text-muted mb-0" style="font-size: 0.875rem;">显示数量：</label>
+            <select id="topNSelect" class="form-select form-select-sm" style="width: 80px;" onchange="screenStocks()">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 股票列表 -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-table me-2"></i>选股结果</span>
+            <span class="text-muted" style="font-size: 0.875rem;" id="resultCount">共 0 只</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>排名</th>
+                            <th>股票代码</th>
+                            <th>名称</th>
+                            <th>行业</th>
+                            <th>综合得分</th>
+                            <th>价值得分</th>
+                            <th>成长得分</th>
+                            <th>质量得分</th>
+                            <th>PE(TTM)</th>
+                            <th>PB</th>
+                            <th>ROE(%)</th>
+                            <th>营收增速(%)</th>
+                            <th>总市值(亿)</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody">
+                        <tr>
+                            <td colspan="14" class="text-center text-muted py-5">
+                                <div class="loading-spinner mx-auto mb-3"></div>
+                                加载中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 因子详情侧边栏 -->
+<div class="factor-detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+<div class="factor-detail-panel" id="detailPanel">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="mb-0" id="detailTitle">因子详情</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="closeDetail()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div id="detailContent"></div>
+</div>
+
+<!-- 因子相关性弹窗 -->
+<div class="modal fade" id="correlationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-project-diagram me-2"></i>因子相关性矩阵</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="correlationContent">
+                <div class="text-center py-5 text-muted">
+                    <div class="loading-spinner mx-auto mb-3"></div>加载中...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentSort = 'composite_score';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadIndustries();
+        screenStocks();
+    });
+
+    function switchSort(sortBy, btn) {
+        currentSort = sortBy;
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        screenStocks();
+    }
+
+    function syncFactorData() {
+        var syncBtn = document.getElementById('syncBtn');
+        var syncProgress = document.getElementById('syncProgress');
+
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>同步中...';
+        syncProgress.classList.add('show');
+
+        axios.post('/api/factor/sync', { pool: 'hs300' })
+            .then(function(response) {
+                if (response.data.success) {
+                    document.getElementById('syncStatus').textContent = response.data.message;
+                    setTimeout(function() {
+                        syncProgress.classList.remove('show');
+                        screenStocks();
+                        loadIndustries();
+                    }, 1000);
+                } else {
+                    alert('同步失败: ' + response.data.error);
+                    syncProgress.classList.remove('show');
+                }
+            })
+            .catch(function(error) {
+                alert('同步失败: ' + error);
+                syncProgress.classList.remove('show');
+            })
+            .finally(function() {
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = '<i class="fas fa-sync-alt me-1"></i>同步数据';
+            });
+    }
+
+    function loadIndustries() {
+        axios.get('/api/factor/industries')
+            .then(function(response) {
+                if (response.data.success) {
+                    var select = document.getElementById('filterIndustry');
+                    select.innerHTML = '<option value="">全部行业</option>';
+                    response.data.data.forEach(function(ind) {
+                        select.innerHTML += '<option value="' + ind + '">' + ind + '</option>';
+                    });
+                }
+            });
+    }
+
+    function screenStocks() {
+        var topN = document.getElementById('topNSelect').value;
+        var params = {
+            top_n: topN,
+            sort_by: currentSort
+        };
+
+        var peMax = document.getElementById('filterPeMax').value;
+        if (peMax) params.pe_ttm_max = peMax;
+
+        var pbMax = document.getElementById('filterPbMax').value;
+        if (pbMax) params.pb_max = pbMax;
+
+        var roeMin = document.getElementById('filterRoeMin').value;
+        if (roeMin) params.roe_min = roeMin;
+
+        var revenueMin = document.getElementById('filterRevenueMin').value;
+        if (revenueMin) params.revenue_yoy_min = revenueMin;
+
+        var industry = document.getElementById('filterIndustry').value;
+        if (industry) params.industry = industry;
+
+        var queryString = Object.keys(params).map(function(k) {
+            return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+        }).join('&');
+
+        document.getElementById('stockTableBody').innerHTML =
+            '<tr><td colspan="14" class="text-center text-muted py-5">' +
+            '<div class="loading-spinner mx-auto mb-3"></div>筛选中...</td></tr>';
+
+        axios.get('/api/factor/screen?' + queryString)
+            .then(function(response) {
+                if (response.data.success) {
+                    updateStats(response.data);
+                    renderTable(response.data.data.stocks);
+                } else {
+                    document.getElementById('stockTableBody').innerHTML =
+                        '<tr><td colspan="14" class="text-center text-danger py-5">' +
+                        response.data.error + '</td></tr>';
+                }
+            })
+            .catch(function(error) {
+                document.getElementById('stockTableBody').innerHTML =
+                    '<tr><td colspan="14" class="text-center text-danger py-5">' +
+                    '获取数据失败: ' + error + '</td></tr>';
+            });
+    }
+
+    function updateStats(responseData) {
+        var data = responseData.data;
+        var dist = responseData.industry_distribution;
+
+        document.getElementById('statTotal').textContent = responseData.latest_date || '-';
+        document.getElementById('statScreened').textContent = data.filtered_total || 0;
+        document.getElementById('statIndustries').textContent = dist ? dist.total_industries : 0;
+
+        if (data.stocks && data.stocks.length > 0) {
+            var avgScore = data.stocks.reduce(function(sum, s) { return sum + (s.composite_score || 0); }, 0) / data.stocks.length;
+            document.getElementById('statAvgScore').textContent = avgScore.toFixed(1);
+        } else {
+            document.getElementById('statAvgScore').textContent = '-';
+        }
+    }
+
+    function renderTable(stocks) {
+        var tbody = document.getElementById('stockTableBody');
+        document.getElementById('resultCount').textContent = '共 ' + stocks.length + ' 只';
+
+        if (!stocks || stocks.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="14" class="text-center text-muted py-5">' +
+                '<i class="fas fa-inbox fa-2x mb-2"></i><br>暂无符合条件的股票</td></tr>';
+            return;
+        }
+
+        var html = '';
+        stocks.forEach(function(stock) {
+            var rank = stock.rank || 0;
+            var rankClass = rank <= 3 ? 'rank-' + rank : 'rank-other';
+
+            html += '<tr>';
+            html += '<td><span class="rank-badge ' + rankClass + '">' + rank + '</span></td>';
+            html += '<td><code>' + stock.ts_code + '</code></td>';
+            html += '<td><strong>' + (stock.name || '-') + '</strong></td>';
+            html += '<td><span class="industry-tag">' + (stock.industry || '-') + '</span></td>';
+            html += '<td class="score-' + getScoreClass(stock.composite_score) + '">' +
+                    renderScoreBar(stock.composite_score) + '</td>';
+            html += '<td class="score-' + getScoreClass(stock.value_score) + '">' +
+                    renderScoreBar(stock.value_score) + '</td>';
+            html += '<td class="score-' + getScoreClass(stock.growth_score) + '">' +
+                    renderScoreBar(stock.growth_score) + '</td>';
+            html += '<td class="score-' + getScoreClass(stock.quality_score) + '">' +
+                    renderScoreBar(stock.quality_score) + '</td>';
+            html += '<td>' + formatVal(stock.factors.pe_ttm) + '</td>';
+            html += '<td>' + formatVal(stock.factors.pb) + '</td>';
+            html += '<td>' + formatVal(stock.factors.roe) + '</td>';
+            html += '<td>' + formatVal(stock.factors.revenue_yoy) + '</td>';
+            html += '<td>' + formatMarketCap(stock.factors.total_mv) + '</td>';
+            html += '<td><button class="btn btn-sm btn-outline-primary" onclick="showDetail(\'' + stock.ts_code + '\')">' +
+                    '<i class="fas fa-chart-bar"></i></button></td>';
+            html += '</tr>';
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function renderScoreBar(score) {
+        if (score === null || score === undefined) return '-';
+        var color = getScoreColor(score);
+        return '<div class="d-flex align-items-center gap-2">' +
+               '<div class="progress score-bar flex-grow-1">' +
+               '<div class="progress-bar" style="width:' + Math.min(score, 100) + '%; background:' + color + '"></div>' +
+               '</div>' +
+               '<span style="font-size:0.85rem;">' + score.toFixed(1) + '</span></div>';
+    }
+
+    function getScoreClass(score) {
+        if (score >= 70) return 'excellent';
+        if (score >= 50) return 'good';
+        if (score >= 30) return 'medium';
+        return 'low';
+    }
+
+    function getScoreColor(score) {
+        if (score >= 70) return '#10b981';
+        if (score >= 50) return '#3b82f6';
+        if (score >= 30) return '#f59e0b';
+        return '#ef4444';
+    }
+
+    function formatVal(val) {
+        if (val === null || val === undefined) return '<span class="text-muted">-</span>';
+        return val.toFixed(2);
+    }
+
+    function formatMarketCap(mv) {
+        if (mv === null || mv === undefined) return '<span class="text-muted">-</span>';
+        return (mv / 10000).toFixed(1);
+    }
+
+    function showDetail(ts_code) {
+        document.getElementById('detailOverlay').classList.add('show');
+        document.getElementById('detailPanel').classList.add('show');
+
+        var content = document.getElementById('detailContent');
+        content.innerHTML = '<div class="text-center py-5"><div class="loading-spinner mx-auto mb-3"></div>加载中...</div>';
+
+        // Get ranking data for this stock
+        axios.get('/api/factor/ranking?factor=composite_score&top_n=100')
+            .then(function(response) {
+                if (response.data.success) {
+                    var stock = response.data.data.find(function(s) { return s.ts_code === ts_code; });
+                    if (stock) {
+                        renderDetail(ts_code, stock);
+                    } else {
+                        content.innerHTML = '<p class="text-muted text-center">未找到该股票数据</p>';
+                    }
+                }
+            });
+    }
+
+    function renderDetail(ts_code, stock) {
+        var content = document.getElementById('detailContent');
+        document.getElementById('detailTitle').textContent = stock.name + ' (' + ts_code + ')';
+
+        // Get screen data for full factor info
+        axios.get('/api/factor/screen?top_n=500&sort_by=composite_score')
+            .then(function(response) {
+                if (response.data.success) {
+                    var s = response.data.data.stocks.find(function(st) { return st.ts_code === ts_code; });
+                    if (s) {
+                        var f = s.factors;
+                        var html = '';
+
+                        html += '<h6 class="text-muted mb-3">综合评分</h6>';
+                        html += '<div class="mb-4">';
+                        html += '<div class="d-flex justify-content-between mb-1"><span>综合得分</span><strong class="score-' + getScoreClass(s.composite_score) + '">' + s.composite_score.toFixed(1) + '</strong></div>';
+                        html += '<div class="progress" style="height:12px;"><div class="progress-bar" style="width:' + s.composite_score + '%;background:' + getScoreColor(s.composite_score) + '"></div></div>';
+                        html += '</div>';
+
+                        html += '<div class="row g-2 mb-4">';
+                        html += '<div class="col-4 text-center"><div class="card p-2"><small class="text-muted">价值</small><div class="fw-bold">' + (s.value_score || 0).toFixed(1) + '</div></div></div>';
+                        html += '<div class="col-4 text-center"><div class="card p-2"><small class="text-muted">成长</small><div class="fw-bold">' + (s.growth_score || 0).toFixed(1) + '</div></div></div>';
+                        html += '<div class="col-4 text-center"><div class="card p-2"><small class="text-muted">质量</small><div class="fw-bold">' + (s.quality_score || 0).toFixed(1) + '</div></div></div>';
+                        html += '</div>';
+
+                        html += '<h6 class="text-muted mb-3">估值因子</h6>';
+                        html += '<table class="table table-sm mb-4">';
+                        html += '<tr><td>PE(TTM)</td><td class="text-end">' + formatVal(f.pe_ttm) + '</td></tr>';
+                        html += '<tr><td>PB</td><td class="text-end">' + formatVal(f.pb) + '</td></tr>';
+                        html += '<tr><td>PS(TTM)</td><td class="text-end">' + formatVal(f.ps_ttm) + '</td></tr>';
+                        html += '<tr><td>股息率</td><td class="text-end">' + formatVal(f.dv_ratio) + '%</td></tr>';
+                        html += '<tr><td>总市值</td><td class="text-end">' + formatMarketCap(f.total_mv) + '亿</td></tr>';
+                        html += '<tr><td>流通市值</td><td class="text-end">' + formatMarketCap(f.circ_mv) + '亿</td></tr>';
+                        html += '</table>';
+
+                        html += '<h6 class="text-muted mb-3">成长因子</h6>';
+                        html += '<table class="table table-sm mb-4">';
+                        html += '<tr><td>营收增长率</td><td class="text-end">' + formatVal(f.revenue_yoy) + '%</td></tr>';
+                        html += '<tr><td>净利润增长率</td><td class="text-end">' + formatVal(f.profit_yoy) + '%</td></tr>';
+                        html += '<tr><td>ROE增长率</td><td class="text-end">' + formatVal(f.roe_yoy) + '%</td></tr>';
+                        html += '<tr><td>EPS增长率</td><td class="text-end">' + formatVal(f.eps_yoy) + '%</td></tr>';
+                        html += '</table>';
+
+                        html += '<h6 class="text-muted mb-3">质量因子</h6>';
+                        html += '<table class="table table-sm mb-4">';
+                        html += '<tr><td>ROE</td><td class="text-end">' + formatVal(f.roe) + '%</td></tr>';
+                        html += '<tr><td>毛利率</td><td class="text-end">' + formatVal(f.grossprofit_margin) + '%</td></tr>';
+                        html += '<tr><td>净利率</td><td class="text-end">' + formatVal(f.netprofit_margin) + '%</td></tr>';
+                        html += '<tr><td>资产负债率</td><td class="text-end">' + formatVal(f.debt_to_assets) + '%</td></tr>';
+                        html += '</table>';
+
+                        html += '<div class="d-grid gap-2">';
+                        html += '<a href="/analysis/' + ts_code + '" class="btn btn-primary"><i class="fas fa-chart-line me-1"></i>技术分析</a>';
+                        html += '</div>';
+
+                        content.innerHTML = html;
+                    }
+                }
+            });
+    }
+
+    function closeDetail() {
+        document.getElementById('detailOverlay').classList.remove('show');
+        document.getElementById('detailPanel').classList.remove('show');
+    }
+
+    function showCorrelation() {
+        var modal = new bootstrap.Modal(document.getElementById('correlationModal'));
+        modal.show();
+
+        axios.get('/api/factor/correlation')
+            .then(function(response) {
+                if (response.data.success) {
+                    renderCorrelationMatrix(response.data.data);
+                } else {
+                    document.getElementById('correlationContent').innerHTML =
+                        '<p class="text-danger text-center">' + response.data.error + '</p>';
+                }
+            });
+    }
+
+    function renderCorrelationMatrix(data) {
+        var factors = data.factors;
+        var matrix = data.matrix;
+
+        if (!factors || factors.length === 0) {
+            document.getElementById('correlationContent').innerHTML =
+                '<p class="text-muted text-center">暂无数据</p>';
+            return;
+        }
+
+        var factorNames = {
+            'pe_ttm': 'PE(TTM)', 'pb': 'PB', 'ps_ttm': 'PS(TTM)', 'dv_ratio': '股息率',
+            'revenue_yoy': '营收增速', 'profit_yoy': '利润增速', 'roe_yoy': 'ROE增速',
+            'eps_yoy': 'EPS增速', 'roe': 'ROE', 'grossprofit_margin': '毛利率',
+            'netprofit_margin': '净利率', 'debt_to_assets': '资产负债率'
+        };
+
+        var html = '<div class="table-responsive"><table class="table table-sm table-bordered" style="font-size:0.8rem;">';
+        html += '<tr><th></th>';
+        factors.forEach(function(f) { html += '<th class="text-center" style="writing-mode:vertical-lr;max-width:40px;">' + (factorNames[f] || f) + '</th>'; });
+        html += '</tr>';
+
+        factors.forEach(function(row_f) {
+            html += '<tr><td class="fw-bold">' + (factorNames[row_f] || row_f) + '</td>';
+            factors.forEach(function(col_f) {
+                var val = matrix[row_f] && matrix[row_f][col_f] !== undefined ? matrix[row_f][col_f] : 0;
+                var color = getCorrelationColor(val);
+                html += '<td class="text-center" style="background:' + color + ';color:' + (Math.abs(val) > 0.5 ? 'white' : '#333') + '">' + val.toFixed(2) + '</td>';
+            });
+            html += '</tr>';
+        });
+
+        html += '</table></div>';
+        html += '<p class="text-muted" style="font-size:0.75rem;">* 颜色越深表示相关性越强，红色为正相关，蓝色为负相关</p>';
+
+        document.getElementById('correlationContent').innerHTML = html;
+    }
+
+    function getCorrelationColor(val) {
+        if (val > 0) {
+            var intensity = Math.min(Math.abs(val), 1);
+            return 'rgba(239, 68, 68, ' + (intensity * 0.7) + ')';
+        } else {
+            var intensity = Math.min(Math.abs(val), 1);
+            return 'rgba(59, 130, 246, ' + (intensity * 0.7) + ')';
+        }
+    }
+</script>
+{% endblock %}

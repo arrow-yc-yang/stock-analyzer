@@ -1,0 +1,458 @@
+﻿{% extends "base.html" %}
+
+{% block title %}{{ ts_code }} - 股票分析{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">首页</a></li>
+                <li class="breadcrumb-item"><a href="/stocks">股票列表</a></li>
+                <li class="breadcrumb-item active" id="stockName">{{ ts_code }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<!-- 股票信息卡片 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-primary text-white">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0" id="stockInfoName">--</h2>
+                    <small class="opacity-75">{{ ts_code }}</small>
+                </div>
+                <div class="text-end">
+                    <h2 class="mb-0" id="stockInfoPrice">--</h2>
+                    <small class="opacity-75">当前价格</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作建议卡片 -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card" id="recommendationCard">
+            <div class="card-body">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie me-2"></i>走势概率预测
+            </div>
+            <div class="card-body" id="probabilitySection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 趋势分析卡片 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-trend-up me-2"></i>趋势分析
+            </div>
+            <div class="card-body" id="trendSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i>K线图表
+            </div>
+            <div class="card-body">
+                <div id="klineChart" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-crosshairs me-2"></i>技术指标
+            </div>
+            <div class="card-body" id="indicatorsSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chess me-2"></i>战法匹配
+            </div>
+            <div class="card-body" id="strategiesSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 股东户数卡片 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-users me-2"></i>股东户数变化
+            </div>
+            <div class="card-body" id="holderSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-shield-alt me-2"></i>海龟交易信号
+            </div>
+            <div class="card-body" id="turtleSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const tsCode = '{{ ts_code }}';
+
+// 页面加载时获取分析数据
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalysis();
+    loadKlineChart();
+    loadHolderNumber();
+});
+
+// 加载分析数据
+async function loadAnalysis() {
+    try {
+        const response = await axios.get(`/api/analysis/${tsCode}`);
+        if (response.data.success) {
+            const data = response.data.data;
+            updateUI(data);
+        } else {
+            showError(response.data.error);
+        }
+    } catch (error) {
+        console.error('加载分析数据失败:', error);
+        showError('加载分析数据失败');
+    }
+}
+
+// 更新UI
+function updateUI(data) {
+    // 更新股票名称
+    if (data.stock_name) {
+        document.getElementById('stockName').textContent = `${data.stock_name} (${tsCode})`;
+        document.getElementById('stockInfoName').textContent = data.stock_name;
+    }
+    
+    // 更新当前价格
+    if (data.current_price) {
+        document.getElementById('stockInfoPrice').textContent = `¥${data.current_price.toFixed(2)}`;
+    }
+    
+    // 更新操作建议
+    updateRecommendation(data.recommendation);
+    
+    // 更新概率预测
+    updateProbability(data.probability);
+    
+    // 更新趋势分析
+    updateTrend(data.trend, data.indicators);
+    
+    // 更新技术指标
+    updateIndicators(data.indicators);
+    
+    // 更新战法匹配
+    updateStrategies(data.strategies);
+    
+    // 更新海龟交易
+    updateTurtle(data.turtle_trading);
+}
+
+// 更新操作建议
+function updateRecommendation(rec) {
+    const card = document.getElementById('recommendationCard');
+    
+    const actionClass = {
+        'buy': 'signal-buy',
+        'sell': 'signal-sell',
+        'hold': 'signal-hold',
+        'wait': 'signal-wait'
+    };
+    
+    const actionText = {
+        'buy': '建议买入',
+        'sell': '建议卖出',
+        'hold': '建议持有',
+        'wait': '建议观望'
+    };
+    
+    const urgencyText = {
+        'high': '高',
+        'medium': '中',
+        'low': '低'
+    };
+    
+    const action = rec.action || 'wait';
+    const confidence = rec.confidence || 0;
+    const urgency = rec.urgency || 'low';
+    
+    let html = `<div class="card-body ${actionClass[action] || 'signal-wait'}">`;
+    html += `<div class="row align-items-center">`;
+    html += `<div class="col-md-4 text-center">`;
+    html += `<h1 class="display-4 mb-0">${actionText[action] || '建议观望'}</h1>`;
+    html += `<p class="mb-0">信心度: ${confidence.toFixed(1)}% | 紧急程度: ${urgencyText[urgency] || '低'}</p>`;
+    html += `</div>`;
+    html += `<div class="col-md-8">`;
+    html += `<div class="row">`;
+    
+    // 入场价位
+    if (rec.entry_levels) {
+        if (rec.entry_levels.aggressive && rec.entry_levels.moderate && rec.entry_levels.conservative) {
+            html += `<div class="col-4 text-center">`;
+            html += `<small>激进买入</small><br><strong>¥${rec.entry_levels.aggressive.toFixed(2)}</strong>`;
+            html += `</div>`;
+            html += `<div class="col-4 text-center">`;
+            html += `<small>稳健买入</small><br><strong>¥${rec.entry_levels.moderate.toFixed(2)}</strong>`;
+            html += `</div>`;
+            html += `<div class="col-4 text-center">`;
+            html += `<small>保守买入</small><br><strong>¥${rec.entry_levels.conservative.toFixed(2)}</strong>`;
+            html += `</div>`;
+        } else if (rec.entry_levels.buy_trigger || rec.entry_levels.sell_trigger) {
+            html += `<div class="col-6 text-center">`;
+            html += `<small>买入触发价</small><br><strong>¥${(rec.entry_levels.buy_trigger || 0).toFixed(2)}</strong>`;
+            html += `</div>`;
+            html += `<div class="col-6 text-center">`;
+            html += `<small>卖出触发价</small><br><strong>¥${(rec.entry_levels.sell_trigger || 0).toFixed(2)}</strong>`;
+            html += `</div>`;
+        } else {
+            html += `<div class="col-12 text-center">`;
+            html += `<small>当前价格</small><br><strong>¥${(rec.current_price || 0).toFixed(2)}</strong>`;
+            html += `</div>`;
+        }
+    } else {
+        html += `<div class="col-12 text-center">`;
+        html += `<small>当前价格</small><br><strong>¥${(rec.current_price || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    
+    // 风险管理
+    if (rec.risk_management && rec.risk_management.stop_loss) {
+        html += `<hr class="my-3">`;
+        html += `<div class="row">`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>止损价</small><br><strong class="text-warning">¥${(rec.risk_management.stop_loss || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>止盈价1</small><br><strong class="text-success">¥${(rec.risk_management.take_profit_1 || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>风险金额</small><br><strong>¥${(rec.risk_management.risk_amount || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>盈亏比</small><br><strong>${(rec.risk_management.risk_reward_ratio || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `</div>`;
+    } else if (rec.risk_management && rec.risk_management.watch_levels) {
+        html += `<hr class="my-3">`;
+        html += `<div class="row">`;
+        html += `<div class="col-6 text-center">`;
+        html += `<small>支撑位</small><br><strong class="text-success">¥${(rec.risk_management.watch_levels.support || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-6 text-center">`;
+        html += `<small>阻力位</small><br><strong class="text-danger">¥${(rec.risk_management.watch_levels.resistance || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `</div>`;
+    }
+    
+    // 描述信息
+    if (rec.description) {
+        html += `<hr class="my-3">`;
+        html += `<div class="row"><div class="col-12">`;
+        html += `<p class="mb-0 small text-muted">${rec.description}</p>`;
+        html += `</div></div>`;
+    }
+    
+    html += `</div>`;
+    html += `</div>`;
+    
+    // 警告信息
+    if (rec.warnings && rec.warnings.length > 0) {
+        html += `<div class="mt-3">`;
+        rec.warnings.forEach(warning => {
+            html += `<div class="alert alert-warning py-2 mb-2"><i class="fas fa-exclamation-triangle me-2"></i>${warning}</div>`;
+        });
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    card.innerHTML = html;
+}
+
+// 更新概率预测
+function updateProbability(prob) {
+    const container = document.getElementById('probabilitySection');
+    
+    const upProb = prob.up_probability || 0;
+    const downProb = prob.down_probability || 0;
+    const sidewaysProb = prob.sideways_probability || 0;
+    const confidence = prob.confidence || 0;
+    
+    let html = '';
+    html += `<div class="mb-3">`;
+    html += `<div class="d-flex justify-content-between mb-1">`;
+    html += `<span>上涨概率</span><span class="text-success">${upProb.toFixed(1)}%</span>`;
+    html += `</div>`;
+    html += `<div class="progress"><div class="progress-bar bg-success" style="width: ${upProb}%"></div></div>`;
+    html += `</div>`;
+    
+    html += `<div class="mb-3">`;
+    html += `<div class="d-flex justify-content-between mb-1">`;
+    html += `<span>下跌概率</span><span class="text-danger">${downProb.toFixed(1)}%</span>`;
+    html += `</div>`;
+    html += `<div class="progress"><div class="progress-bar bg-danger" style="width: ${downProb}%"></div></div>`;
+    html += `</div>`;
+    
+    html += `<div class="mb-3">`;
+    html += `<div class="d-flex justify-content-between mb-1">`;
+    html += `<span>横盘概率</span><span class="text-warning">${sidewaysProb.toFixed(1)}%</span>`;
+    html += `</div>`;
+    html += `<div class="progress"><div class="progress-bar bg-warning" style="width: ${sidewaysProb}%"></div></div>`;
+    html += `</div>`;
+    
+    html += `<hr>`;
+    html += `<p class="mb-1"><strong>预测置信度:</strong> ${confidence.toFixed(1)}%</p>`;
+    
+    if (prob.price_targets) {
+        const targets = prob.price_targets;
+        html += `<p class="mb-1"><strong>上涨目标:</strong> ¥${(targets.up_target || 0).toFixed(2)}</p>`;
+        html += `<p class="mb-1"><strong>下跌目标:</strong> ¥${(targets.down_target || 0).toFixed(2)}</p>`;
+        html += `<p class="mb-0"><strong>预期变动:</strong> ${(targets.expected_move || 0).toFixed(2)}%</p>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// 更新趋势分析
+function updateTrend(trend, indicators) {
+    const container = document.getElementById('trendSection');
+    
+    if (!trend) {
+        container.innerHTML = '<p class="text-muted">暂无趋势数据</p>';
+        return;
+    }
+    
+    let html = '<div class="row">';
+    
+    // 短期趋势
+    html += `
+        <div class="col-md-4 text-center border-end">
+            <h5 class="mb-2">短期趋势 <small class="text-muted">(MA5/20日)</small></h5>
+            <div id="miniChartShort" style="height:70px;"></div>
+            <div id="shortTrendDetails" class="mt-2 small"></div>
+            <div id="shortTrendLabel" class="mt-1"></div>
+        </div>
+    `;
+    
+    // 中期趋势
+    html += `
+        <div class="col-md-4 text-center border-end">
+            <h5 class="mb-2">中期趋势 <small class="text-muted">(MA20/90日)</small></h5>
+            <div id="miniChartMid" style="height:70px;"></div>
+            <div id="midTrendDetails" class="mt-2 small"></div>
+            <div id="midTrendLabel" class="mt-1"></div>
+        </div>
+    `;
+    
+    // 长期趋势
+    html += `
+        <div class="col-md-4 text-center">
+            <h5 class="mb-2">长期趋势 <small class="text-muted">(MA60/500日)</small></h5>
+            <div id="miniChartLong" style="height:70px;"></div>
+            <div id="longTrendDetails" class="mt-2 small"></div>
+            <div id="longTrendLabel" class="mt-1"></div>
+        </div>
+    `;
+    
+    html += '</div>';
+    
+    container.innerHTML = html;
+    
+    // 加载迷你趋势图
+    loadMiniTrendCharts();
+}
+
+// 加载迷你趋势图
+async function loadMiniTrendCharts() {
+    try {
+        // 获取500天日线数据
+        const response = await axios.get(`/api/kline/${tsCode}?freq=D&limit=500`);
+        if (!response.data.success) return;
+        
+        const data = response.data.data;
+        if (data.length === 0) return;
+        
+        const formatDate = (dateStr) => {
+            if (!dateStr || dateStr.length !== 8) return dateStr;
+            return dateStr.substring(0, 4) + '-' + dateStr.substring(4, 6) + '-' + dateStr.substring(6, 8);
+        };
+        
+        const allDates = data.map(d => formatDate(d.trade_date));
+        const allCloses = data.map(d => d.close);
+        
+        const calculateMA = (data, period) => {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { result.push(null); }
+                else {
+                    let sum = 0;
+                    for (let j = 0; j < period; j++) sum += data[i - j];
+                    result.push(sum / period);
+                }
+            }
+            return result;
+        };
+        
+        // 计算均线斜率（最后5天的变化百分比）
+        const calculateSlope = (maData) => {
+            const validData = maData.filter(v => v !== null);
+            if (validData.length < 5) return 0;
+            const last5 = validData.sli

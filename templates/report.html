@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+
+{% block title %}股票建议报表 - 股票分析系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-btn {
+        border-radius: 20px;
+        padding: 0.5rem 1.25rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .filter-btn.active {
+        color: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .filter-btn-all.active { background-color: #6366f1; }
+    .filter-btn-buy.active { background-color: #10b981; }
+    .filter-btn-hold.active { background-color: #3b82f6; }
+    .filter-btn-sell.active { background-color: #ef4444; }
+    .filter-btn-wait.active { background-color: #6b7280; }
+
+    .stat-card-buy { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .stat-card-hold { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+    .stat-card-sell { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    .stat-card-wait { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); }
+
+    .stat-card {
+        color: white;
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    .stat-card .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: white;
+    }
+    .stat-card .stat-label {
+        color: rgba(255,255,255,0.85);
+        font-size: 0.875rem;
+    }
+
+    .table-hover tbody tr {
+        cursor: pointer;
+        transition: background-color 0.15s;
+    }
+    .table-hover tbody tr:hover {
+        background-color: #f1f5f9;
+    }
+
+    .badge-buy { background-color: #10b981; color: white; }
+    .badge-hold { background-color: #3b82f6; color: white; }
+    .badge-sell { background-color: #ef4444; color: white; }
+    .badge-wait { background-color: #6b7280; color: white; }
+
+    .trend-up { color: #10b981; font-weight: 600; }
+    .trend-down { color: #ef4444; font-weight: 600; }
+    .trend-sideways { color: #f59e0b; font-weight: 600; }
+
+    .sort-select {
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        padding: 0.5rem 1rem;
+    }
+
+    .confidence-bar {
+        min-width: 60px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0"><i class="fas fa-file-alt me-2"></i>股票建议报表</h3>
+        <div class="d-flex align-items-center gap-2">
+            <label class="text-muted mb-0" style="font-size: 0.875rem;">排序：</label>
+            <select id="sortSelect" class="sort-select" onchange="loadReport()">
+                <option value="confidence">按信心度排序</option>
+                <option value="name">按名称排序</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 筛选按钮组 -->
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <button class="btn filter-btn filter-btn-all active" data-action="all" onclick="filterReport('all', this)">
+            <i class="fas fa-th-list me-1"></i>全部
+        </button>
+        <button class="btn btn-outline-success filter-btn filter-btn-buy" data-action="buy" onclick="filterReport('buy', this)">
+            <i class="fas fa-arrow-up me-1"></i>建仓
+        </button>
+        <button class="btn btn-outline-primary filter-btn filter-btn-hold" data-action="hold" onclick="filterReport('hold', this)">
+            <i class="fas fa-hand me-1"></i>持有
+        </button>
+        <button class="btn btn-outline-danger filter-btn filter-btn-sell" data-action="sell" onclick="filterReport('sell', this)">
+            <i class="fas fa-arrow-down me-1"></i>卖出
+        </button>
+        <button class="btn btn-outline-secondary filter-btn filter-btn-wait" data-action="wait" onclick="filterReport('wait', this)">
+            <i class="fas fa-eye me-1"></i>观望
+        </button>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-buy">
+                <div class="stat-value" id="statBuy">0</div>
+                <div class="stat-label">建仓</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-hold">
+                <div class="stat-value" id="statHold">0</div>
+                <div class="stat-label">持有</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-sell">
+                <div class="stat-value" id="statSell">0</div>
+                <div class="stat-label">卖出</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card stat-card-wait">
+                <div class="stat-value" id="statWait">0</div>
+                <div class="stat-label">观望</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 股票列表表格 -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-table me-2"></i>股票列表</span>
+            <span class="text-muted" style="font-size: 0.875rem;" id="resultCount">共 0 只</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>股票代码</th>
+                            <th>名称</th>
+                            <th>建议</th>
+                            <th>信心度</th>
+                            <th>短期趋势</th>
+                            <th>中期趋势</th>
+                            <th>长期趋势</th>
+                            <th>RSI</th>
+                            <th>上涨概率</th>
+                            <th>止损价</th>
+                            <th>止盈价</th>
+                            <th>海龟信号</th>
+                            <th>分析日期</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        <tr>
+                            <td colspan="13" class="text-center text-muted py-5">
+                                <div class="loading-spinner mx-auto mb-3"></div>
+                                加载中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentAction = 'all';
+
+    // 页面加载时自动获取数据
+    document.addEventListener('DOMContentLoaded', function() {
+        loadReport();
+    });
+
+    function filterReport(action, btn) {
+        currentAction = action;
+
+        // 更新按钮激活状态
+        document.querySelectorAll('.filter-btn').forEach(function(b) {
+            b.classList.remove('active');
+        });
+        btn.classList.add('active');
+
+        loadReport();
+    }
+
+    function loadReport() {
+        var sort_by = document.getElementById('sortSelect').value;
+        var url = '/api/report?action=' + currentAction + '&sort_by=' + sort_by;
+
+        document.getElementById('reportTableBody').innerHTML =
+            '<tr><td colspan="13" class="text-center text-muted py-5">' +
+            '<div class="loading-spinner mx-auto mb-3"></div>加载中...</td></tr>';
+
+        axios.get(url)
+            .then(function(response) {
+                if (response.data.success) {
+                    updateStats(response.data.stats);
+                    renderTable(response.data.data);
+                } else {
+                    document.getElementById('reportTableBody').innerHTML =
+                        '<tr><td colspan="13" class="text-center text-danger py-5">' +
+                        response.data.error + '</td></tr>';
+                }
+            })
+            .catch(function(error) {
+                document.getElementById('reportTableBody').innerHTML =
+                    '<tr><td colspan="13" class="text-center text-danger py-5">' +
+                    '获取数据失败: ' + error + '</td></tr>';
+            });
+    }
+
+    function updateStats(stats) {
+        document.getElementById('statBuy').textContent = stats.buy;
+        document.getElementById('statHold').textContent = stats.hold;
+        document.getElementById('statSell').textContent = stats.sell;
+        document.getElementById('statWait').textContent = stats.wait;
+    }
+
+    function renderTable(data) {
+        var tbody = document.getElementById('reportTableBody');
+        document.getElementById('resultCount').textContent = '共 ' + data.length + ' 只';
+
+        if (data.length === 0) {
+            tbody.innerHTML =
+                '<tr><td colspan="13" class="text-center text-muted py-5">' +
+                '<i class="fas fa-inbox fa-2x mb-2"></i><br>暂无数据</td></tr>';
+            return;
+        }
+
+        var html = '';
+        data.forEach(function(item) {
+            var recLabel = getRecommendationLabel(item.recommendation);
+            var recClass = 'badge-' + item.recommendation;
+            var trendClass = getTrendClass;
+
+            html += '<tr onclick="window.location.href=\'/analysis/' + item.ts_code + '\'" title="点击查看详细分析">';
+            html += '<td><code>' + item.ts_code + '</code></td>';
+            html += '<td><strong>' + (item.name || '-') + '</strong></td>';
+            html += '<td><span class="badge ' + recClass + '">' + recLabel + '</span></td>';
+            html += '<td>';
+            html += '  <div class="d-flex align-items-center gap-2">';
+            html += '    <div class="progress confidence-bar flex-grow-1">';
+            html += '      <div class="progress-bar bg-' + getConfidenceColor(item.confidence) + '" role="progressbar" style="width: ' + Math.min(item.confidence, 100) + '%"></div>';
+            html += '    </div>';
+            html += '    <span>' + (item.confidence ? item.confidence.toFixed(1) + '%' : '-') + '</span>';
+            html += '  </div>';
+            html += '</td>';
+            html += '<td class="' + getTrendClass(item.short_trend) + '">' + getTrendLabel(item.short_trend) + '</td>';
+            html += '<td class="' + getTrendClass(item.mid_trend) + '">' + getTrendLabel(item.mid_trend) + '</td>';
+            html += '<td class="' + getTrendClass(item.long_trend) + '">' + getTrendLabel(item.long_trend) + '</td>';
+            html += '<td>' + (item.rsi ? item.rsi.toFixed(1) : '-') + '</td>';
+            html += '<td>' + (item.up_probability ? item.up_probability.toFixed(1) + '%' : '-') + '</td>';
+            html += '<td>' + (item.stop_loss ? item.stop_loss.toFixed(2) : '-') + '</td>';
+            html += '<td>' + (item.take_profit ? item.take_profit.toFixed(2) : '-') + '</td>';
+            html += '<td>' + getTurtleSignal(item.turtle_signal) + '</td>';
+            html += '<td class="text-muted" style="font-size: 0.875rem;">' + (item.analysis_date || '-') + '</td>';
+            html += '</tr>';
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function getRecommendationLabel(rec) {
+        var labels = {
+            'buy': '建仓',
+            'hold': '持有',
+            'sell': '卖出',
+            'wait': '观望'
+        };
+        return labels[rec] || rec || '-';
+    }
+
+    function getTrendClass(trend) {
+        if (trend === 'up') return 'trend-up';
+        if (trend === 'down') return 'trend-down';
+        return 'trend-sideways';
+    }
+
+    function getTrendLabel(trend) {
+        var labels = {
+            'up': '上涨',
+            'down': '下跌',
+            'sideways': '震荡'
+        };
+        return labels[trend] || trend || '-';
+    }
+
+    function getTurtleSignal(signal) {
+        if (signal === 'long') return '<span class="trend-up">做多</span>';
+        if (signal === 'short') return '<span class="trend-down">做空</span>';
+        if (signal === 'none') return '<span class="text-muted">无</span>';
+        return '<span class="text-muted">' + (signal || '-') + '</span>';
+    }
+
+    function getConfidenceColor(confidence) {
+        if (confidence >= 70) return 'success';
+        if (confidence >= 50) return 'info';
+        if (confidence >= 30) return 'warning';
+        return 'secondary';
+    }
+</script>
+{% endblock %}

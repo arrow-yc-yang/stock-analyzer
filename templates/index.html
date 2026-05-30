@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}股票分析系统 - 首页{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-4">
+                    <i class="fas fa-search me-2"></i>股票搜索
+                </h4>
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" class="form-control" id="searchInput" 
+                           placeholder="输入股票代码或名称进行搜索...">
+                    <button class="btn btn-primary" type="button" onclick="searchStocks()">
+                        搜索
+                    </button>
+                </div>
+                <div id="searchResults" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-value text-primary" id="totalStocks">-</div>
+            <div class="stat-label">股票总数</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-value text-success" id="hs300Count">-</div>
+            <div class="stat-label">沪深300</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-value text-warning" id="customCount">-</div>
+            <div class="stat-label">自选股票</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="stat-value text-info" id="todayAnalysis">-</div>
+            <div class="stat-label">今日分析</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-signal me-2"></i>今日买入信号</span>
+                <a href="/stocks" class="btn btn-sm btn-outline-primary">查看全部</a>
+            </div>
+            <div class="card-body">
+                <div id="buySignals">
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-sync me-2"></i>数据同步
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="syncStocks()">
+                        <i class="fas fa-database me-2"></i>同步股票列表
+                    </button>
+                    <button class="btn btn-outline-success" onclick="syncKline()">
+                        <i class="fas fa-chart-bar me-2"></i>同步K线数据
+                    </button>
+                </div>
+                <div id="syncStatus" class="mt-3"></div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="fas fa-info-circle me-2"></i>系统状态
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        数据服务正常
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        分析引擎就绪
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        定时任务运行中
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        API接口可用
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 页面加载时获取仪表盘数据
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboard();
+});
+
+// 加载仪表盘数据
+async function loadDashboard() {
+    try {
+        const response = await axios.get('/api/dashboard');
+        if (response.data.success) {
+            const data = response.data.data;
+            
+            // 更新统计数字
+            document.getElementById('totalStocks').textContent = data.stats.total_stocks;
+            document.getElementById('hs300Count').textContent = data.stats.hs300_count;
+            document.getElementById('customCount').textContent = data.stats.custom_count;
+            document.getElementById('todayAnalysis').textContent = data.stats.today_analysis;
+            
+            // 更新买入信号
+            updateBuySignals(data.buy_signals);
+        }
+    } catch (error) {
+        console.error('加载仪表盘数据失败:', error);
+    }
+}
+
+// 更新买入信号列表
+function updateBuySignals(signals) {
+    const container = document.getElementById('buySignals');
+    
+    if (!signals || signals.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">暂无买入信号</p>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-hover">';
+    html += '<thead><tr><th>股票</th><th>信心度</th><th>建议买入价</th><th>止损价</th><th>操作</th></tr></thead>';
+    html += '<tbody>';
+    
+    signals.forEach(signal => {
+        html += `<tr>
+            <td>
+                <strong>${signal.stock_name}</strong>
+                <br><small class="text-muted">${signal.ts_code}</small>
+            </td>
+            <td>
+                <div class="d-flex align-items-center">
+                    <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                        <div class="progress-bar bg-success" style="width: ${signal.confidence}%"></div>
+                    </div>
+                    <span class="text-success">${signal.confidence}%</span>
+                </div>
+            </td>
+            <td>¥${signal.entry_price}</td>
+            <td class="text-danger">¥${signal.stop_loss}</td>
+            <td>
+                <a href="/analysis/${signal.ts_code}" class="btn btn-sm btn-primary">
+                    分析
+                </a>
+            </td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// 搜索股票
+async function searchStocks() {
+    const keyword = document.getElementById('searchInput').value.trim();
+    if (!keyword) return;
+    
+    try {
+        const response = await axios.get(`/api/stocks/search?keyword=${encodeURIComponent(keyword)}`);
+        if (response.data.success) {
+            displaySearchResults(response.data.data);
+        }
+    } catch (error) {
+        console.error('搜索失败:', error);
+        alert('搜索失败，请重试');
+    }
+}
+
+// 显示搜索结果
+function displaySearchResults(stocks) {
+    const container = document.getElementById('searchResults');
+    
+    if (!stocks || stocks.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">未找到匹配的股票</div>';
+        return;
+    }
+    
+    let html = '<div class="list-group">';
+    stocks.forEach(stock => {
+        html += `<a href="/analysis/${stock.ts_code}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>${stock.name}</strong>
+                    <span class="badge bg-secondary ms-2">${stock.ts_code}</span>
+                    ${stock.industry ? `<span class="badge bg-info ms-1">${stock.industry}</span>` : ''}
+                </div>
+                <i class="fas fa-chevron-right text-muted"></i>
+            </div>
+        </a>`;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+// 同步股票列表
+async function syncStocks() {
+    const statusDiv = document.getElementById('syncStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>正在同步股票列表...</div>';
+    
+    try {
+        const response = await axios.post('/api/sync/stocks', { pool: 'hs300' });
+        if (response.data.success) {
+            statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check me-2"></i>${response.data.message}</div>`;
+            loadDashboard(); // 刷新数据
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${response.data.error}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = '<div class="alert alert-danger">同步失败，请重试</div>';
+    }
+}
+
+// 同步K线数据
+async function syncKline() {
+    const statusDiv = document.getElementById('syncStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin me-2"></i>正在同步K线数据，这可能需要几分钟...</div>';
+    
+    try {
+        const response = await axios.post('/api/sync/kline', { pool: 'hs300', freq: 'D' });
+        if (response.data.success) {
+            statusDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check me-2"></i>${response.data.message}</div>`;
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${response.data.error}</div>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = '<div class="alert alert-danger">同步失败，请重试</div>';
+    }
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchStocks();
+    }
+});
+</script>
+{% endblock %}
