@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}自选股票{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-star me-2"></i>添加自选股票
+            </div>
+            <div class="card-body">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" class="form-control" id="searchInput" 
+                           placeholder="输入股票代码（如：000001.SZ）或名称">
+                    <button class="btn btn-primary" type="button" onclick="searchAndAdd()">
+                        搜索并添加
+                    </button>
+                </div>
+                <div id="searchResults" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-list me-2"></i>我的自选</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="batchAnalyze()">
+                    <i class="fas fa-sync me-1"></i>批量分析
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="customStocksList">
+                    <div class="loading">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量分析结果模态框 -->
+<div class="modal fade" id="batchAnalysisModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">批量分析结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="batchAnalysisResults">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 页面加载时获取自选列表
+document.addEventListener('DOMContentLoaded', function() {
+    loadCustomStocks();
+});
+
+// 加载自选股票
+async function loadCustomStocks() {
+    try {
+        const response = await axios.get('/api/stocks?type=custom');
+        if (response.data.success) {
+            renderCustomStocks(response.data.data);
+        }
+    } catch (error) {
+        console.error('加载自选股票失败:', error);
+        document.getElementById('customStocksList').innerHTML = `
+            <div class="alert alert-danger">加载失败，请刷新重试</div>
+        `;
+    }
+}
+
+// 渲染自选股票
+function renderCustomStocks(stocks) {
+    const container = document.getElementById('customStocksList');
+    
+    if (stocks.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">暂无自选股票，请添加</div>';
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-hover">';
+    html += '<thead><tr><th>代码</th><th>名称</th><th>行业</th><th>操作</th></tr></thead>';
+    html += '<tbody>';
+    
+    stocks.forEach(stock => {
+        html += `<tr>
+            <td><strong>${stock.ts_code}</strong></td>
+            <td>${stock.name}</td>
+            <td>${stock.industry || '-'}</td>
+            <td>
+                <a href="/analysis/${stock.ts_code}" class="btn btn-sm btn-primary me-1">
+                    <i class="fas fa-chart-line"></i> 分析
+                </a>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeCustom('${stock.ts_code}')">
+                    <i class="fas fa-trash"></i> 移除
+                </button>
+            </td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// 搜索并添加
+async function searchAndAdd() {
+    const keyword = document.getElementById('searchInput').value.trim();
+    if (!keyword) return;
+    
+    const resultsDiv = document.getElementById('searchResults');
+    resultsDiv.innerHTML = '<div class="alert alert-info">搜索中...</div>';
+    
+    try {
+        const response = await axios.get(`/api/stocks/search?keyword=${encodeURIComponent(keyword)}`);
+        if (response.data.success) {
+            displaySearchResults(response.data.data);
+        }
+    } catch (error) {
+        resultsDiv.innerHTML = '<div class="alert alert-danger">搜索失败</div>';
+    }
+}
+
+// 显示搜索结果
+function displaySearchResults(stocks) {
+    const container = document.getElementById('searchResults');
+    
+    if (stocks.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">未找到匹配的股票</div>';
+        return;
+    }
+    
+    let html = '<div class="list-group">';
+    stocks.forEach(stock => {
+        html += `<div class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <strong>${stock.name}</strong>
+                <span class="badge bg-secondary ms-2">${stock.ts_code}</span>
+                ${stock.industry ? `<span class="badge bg-info ms-1">${stock.industry}</span>` : ''}
+            </div>
+            <button class="btn btn-sm btn-success" onclick="addCustom('${stock.ts_code}')">
+                <i class="fas fa-plus"></i> 添加
+            </button>
+        </div>`;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+// 添加自选
+async function addCustom(tsCode) {
+    try {
+        const response = await axios.post('/api/stocks/custom', { ts_code: tsCode });
+        if (response.data.success) {
+            alert('添加成功');
+            document.getElementById('searchResults').innerHTML = '';
+            document.getElementById('searchInput').value = '';
+            loadCustomStocks();
+        } else {
+            alert(response.data.error || '添加失败');
+        }
+    } catch (error) {
+        alert('添加失败，请重试');
+    }
+}
+
+// 移除自选
+async function removeCustom(tsCode) {
+    if (!confirm('确定移除？')) return;
+    
+    try {
+        const response = await axios.delete(`/api/stocks/custom/${tsCode}`);
+        if (response.data.success) {
+            loadCustomStocks();
+        } else {
+            alert(response.data.error || '移除失败');
+        }
+    } catch (error) {
+        alert('移除失败，请重试');
+    }
+}
+
+// 批量分析
+async function batchAnalyze() {
+    const modal = new bootstrap.Modal(document.getElementById('batchAnalysisModal'));
+    modal.show();
+    
+    const resultsDiv = document.getElementById('batchAnalysisResults');
+    resultsDiv.innerHTML = '<div class="loading"><div class="loading-spinner"></div></div>';
+    
+    try {
+        // 获取自选股票
+        const response = await axios.get('/api/stocks?type=custom');
+        if (!response.data.success || response.data.data.length === 0) {
+            resultsDiv.innerHTML = '<div class="alert alert-info">暂无自选股票</div>';
+            return;
+        }
+        
+        const stocks = response.data.data;
+        const results = [];
+        
+        // 逐个分析
+        for (const stock of stocks) {
+            try {
+                const analysisResponse = await axios.get(`/api/analysis/${stock.ts_code}`);
+                if (analysisResponse.data.success) {
+                    results.push({
+                        stock: stock,
+                        analysis: analysisResponse.data.data
+                    });
+                }
+            } catch (e) {
+                console.error(`分析 ${stock.ts_code} 失败:`, e);
+            }
+        }
+        
+        // 显示结果
+        renderBatchResults(results);
+    } catch (error) {
+        resultsDiv.innerHTML = '<div class="alert alert-danger">分析失败</div>';
+    }
+}
+
+// 渲染批量分析结果
+function renderBatchResults(results) {
+    const container = document.getElementById('batchAnalysisResults');
+    
+    if (results.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">暂无分析结果</div>';
+        return;
+    }
+    
+    // 按买入信号排序
+    results.sort((a, b) => {
+        const scoreA = a.analysis.recommendation.action === 'buy' ? a.analysis.recommendation.confidence : 0;
+        const scoreB = b.analysis.recommendation.action === 'buy' ? b.analysis.recommendation.confidence : 0;
+        return scoreB - scoreA;
+    });
+    
+    let html = '<div class="table-responsive"><table class="table table-hover">';
+    html += '<thead><tr><th>股票</th><th>建议</th><th>信心度</th><th>目标价</th><th>操作</th></tr></thead>';
+    html += '<tbody>';
+    
+    results.forEach(item => {
+        const rec = item.analysis.recommendation;
+        const actionClass = rec.action === 'buy' ? 'text-success' : rec.action === 'sell' ? 'text-danger' : 'text-muted';
+        const actionText = rec.action === 'buy' ? '买入' : rec.action === 'sell' ? '卖出' : rec.action === 'hold' ? '持有' : '观望';
+        
+        html += `<tr>
+            <td>
+                <strong>${item.stock.name}</strong>
+                <br><small class="text-muted">${item.stock.ts_code}</small>
+            </td>
+            <td class="${actionClass}"><strong>${actionText}</strong></td>
+            <td>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar ${rec.action === 'buy' ? 'bg-success' : rec.action === 'sell' ? 'bg-danger' : 'bg-secondary'}" 
+                         style="width: ${rec.confidence}%"></div>
+                </div>
+                <small>${rec.confidence}%</small>
+            </td>
+            <td>
+                ${rec.entry_levels && rec.entry_levels.moderate ? `买入: ¥${rec.entry_levels.moderate}` : '-'}
+                ${rec.risk_management && rec.risk_management.take_profit_1 ? `<br><small class="text-success">止盈: ¥${rec.risk_management.take_profit_1}</small>` : ''}
+            </td>
+            <td>
+                <a href="/analysis/${item.stock.ts_code}" class="btn btn-sm btn-primary">详情</a>
+            </td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchAndAdd();
+    }
+});
+</script>
+{% endblock %}

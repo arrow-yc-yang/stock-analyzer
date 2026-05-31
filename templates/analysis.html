@@ -1,0 +1,1193 @@
+﻿{% extends "base.html" %}
+
+{% block title %}{{ ts_code }} - 股票分析{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">首页</a></li>
+                <li class="breadcrumb-item"><a href="/stocks">股票列表</a></li>
+                <li class="breadcrumb-item active" id="stockName">{{ ts_code }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<!-- 股票信息卡片 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-primary text-white">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-0" id="stockInfoName">--</h2>
+                    <small class="opacity-75">{{ ts_code }}</small>
+                </div>
+                <div class="text-end">
+                    <h2 class="mb-0" id="stockInfoPrice">--</h2>
+                    <small class="opacity-75">当前价格</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作建议卡片 -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card" id="recommendationCard">
+            <div class="card-body">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie me-2"></i>走势概率预测
+            </div>
+            <div class="card-body" id="probabilitySection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 趋势分析卡片 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-trend-up me-2"></i>趋势分析
+            </div>
+            <div class="card-body" id="trendSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i>K线图表
+            </div>
+            <div class="card-body">
+                <div id="klineChart" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-crosshairs me-2"></i>技术指标
+            </div>
+            <div class="card-body" id="indicatorsSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chess me-2"></i>战法匹配
+            </div>
+            <div class="card-body" id="strategiesSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 股东户数卡片 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-users me-2"></i>股东户数变化
+            </div>
+            <div class="card-body" id="holderSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-shield-alt me-2"></i>海龟交易信号
+            </div>
+            <div class="card-body" id="turtleSection">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const tsCode = '{{ ts_code }}';
+
+// 页面加载时获取分析数据
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalysis();
+    loadKlineChart();
+    loadHolderNumber();
+});
+
+// 加载分析数据
+async function loadAnalysis() {
+    try {
+        const response = await axios.get(`/api/analysis/${tsCode}`);
+        if (response.data.success) {
+            const data = response.data.data;
+            updateUI(data);
+        } else {
+            showError(response.data.error);
+        }
+    } catch (error) {
+        console.error('加载分析数据失败:', error);
+        showError('加载分析数据失败');
+    }
+}
+
+// 更新UI
+function updateUI(data) {
+    // 更新股票名称
+    if (data.stock_name) {
+        document.getElementById('stockName').textContent = `${data.stock_name} (${tsCode})`;
+        document.getElementById('stockInfoName').textContent = data.stock_name;
+    }
+    
+    // 更新当前价格
+    if (data.current_price) {
+        document.getElementById('stockInfoPrice').textContent = `¥${data.current_price.toFixed(2)}`;
+    }
+    
+    // 更新操作建议
+    updateRecommendation(data.recommendation);
+    
+    // 更新概率预测
+    updateProbability(data.probability);
+    
+    // 更新趋势分析
+    updateTrend(data.trend, data.indicators);
+    
+    // 更新技术指标
+    updateIndicators(data.indicators);
+    
+    // 更新战法匹配
+    updateStrategies(data.strategies);
+    
+    // 更新海龟交易
+    updateTurtle(data.turtle_trading);
+}
+
+// 更新操作建议
+function updateRecommendation(rec) {
+    const card = document.getElementById('recommendationCard');
+    
+    const actionClass = {
+        'buy': 'signal-buy',
+        'sell': 'signal-sell',
+        'hold': 'signal-hold',
+        'wait': 'signal-wait'
+    };
+    
+    const actionText = {
+        'buy': '建议买入',
+        'sell': '建议卖出',
+        'hold': '建议持有',
+        'wait': '建议观望'
+    };
+    
+    const urgencyText = {
+        'high': '高',
+        'medium': '中',
+        'low': '低'
+    };
+    
+    const action = rec.action || 'wait';
+    const confidence = rec.confidence || 0;
+    const urgency = rec.urgency || 'low';
+    
+    let html = `<div class="card-body ${actionClass[action] || 'signal-wait'}">`;
+    html += `<div class="row align-items-center">`;
+    html += `<div class="col-md-4 text-center">`;
+    html += `<h1 class="display-4 mb-0">${actionText[action] || '建议观望'}</h1>`;
+    html += `<p class="mb-0">信心度: ${confidence.toFixed(1)}% | 紧急程度: ${urgencyText[urgency] || '低'}</p>`;
+    html += `</div>`;
+    html += `<div class="col-md-8">`;
+    html += `<div class="row">`;
+    
+    // 入场价位
+    if (rec.entry_levels) {
+        if (rec.entry_levels.aggressive && rec.entry_levels.moderate && rec.entry_levels.conservative) {
+            html += `<div class="col-4 text-center">`;
+            html += `<small>激进买入</small><br><strong>¥${rec.entry_levels.aggressive.toFixed(2)}</strong>`;
+            html += `</div>`;
+            html += `<div class="col-4 text-center">`;
+            html += `<small>稳健买入</small><br><strong>¥${rec.entry_levels.moderate.toFixed(2)}</strong>`;
+            html += `</div>`;
+            html += `<div class="col-4 text-center">`;
+            html += `<small>保守买入</small><br><strong>¥${rec.entry_levels.conservative.toFixed(2)}</strong>`;
+            html += `</div>`;
+        } else if (rec.entry_levels.buy_trigger || rec.entry_levels.sell_trigger) {
+            html += `<div class="col-6 text-center">`;
+            html += `<small>买入触发价</small><br><strong>¥${(rec.entry_levels.buy_trigger || 0).toFixed(2)}</strong>`;
+            html += `</div>`;
+            html += `<div class="col-6 text-center">`;
+            html += `<small>卖出触发价</small><br><strong>¥${(rec.entry_levels.sell_trigger || 0).toFixed(2)}</strong>`;
+            html += `</div>`;
+        } else {
+            html += `<div class="col-12 text-center">`;
+            html += `<small>当前价格</small><br><strong>¥${(rec.current_price || 0).toFixed(2)}</strong>`;
+            html += `</div>`;
+        }
+    } else {
+        html += `<div class="col-12 text-center">`;
+        html += `<small>当前价格</small><br><strong>¥${(rec.current_price || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    
+    // 风险管理
+    if (rec.risk_management && rec.risk_management.stop_loss) {
+        html += `<hr class="my-3">`;
+        html += `<div class="row">`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>止损价</small><br><strong class="text-warning">¥${(rec.risk_management.stop_loss || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>止盈价1</small><br><strong class="text-success">¥${(rec.risk_management.take_profit_1 || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>风险金额</small><br><strong>¥${(rec.risk_management.risk_amount || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-3 text-center">`;
+        html += `<small>盈亏比</small><br><strong>${(rec.risk_management.risk_reward_ratio || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `</div>`;
+    } else if (rec.risk_management && rec.risk_management.watch_levels) {
+        html += `<hr class="my-3">`;
+        html += `<div class="row">`;
+        html += `<div class="col-6 text-center">`;
+        html += `<small>支撑位</small><br><strong class="text-success">¥${(rec.risk_management.watch_levels.support || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `<div class="col-6 text-center">`;
+        html += `<small>阻力位</small><br><strong class="text-danger">¥${(rec.risk_management.watch_levels.resistance || 0).toFixed(2)}</strong>`;
+        html += `</div>`;
+        html += `</div>`;
+    }
+    
+    // 描述信息
+    if (rec.description) {
+        html += `<hr class="my-3">`;
+        html += `<div class="row"><div class="col-12">`;
+        html += `<p class="mb-0 small text-muted">${rec.description}</p>`;
+        html += `</div></div>`;
+    }
+    
+    html += `</div>`;
+    html += `</div>`;
+    
+    // 警告信息
+    if (rec.warnings && rec.warnings.length > 0) {
+        html += `<div class="mt-3">`;
+        rec.warnings.forEach(warning => {
+            html += `<div class="alert alert-warning py-2 mb-2"><i class="fas fa-exclamation-triangle me-2"></i>${warning}</div>`;
+        });
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    card.innerHTML = html;
+}
+
+// 更新概率预测
+function updateProbability(prob) {
+    const container = document.getElementById('probabilitySection');
+    
+    const upProb = prob.up_probability || 0;
+    const downProb = prob.down_probability || 0;
+    const sidewaysProb = prob.sideways_probability || 0;
+    const confidence = prob.confidence || 0;
+    
+    let html = '';
+    html += `<div class="mb-3">`;
+    html += `<div class="d-flex justify-content-between mb-1">`;
+    html += `<span>上涨概率</span><span class="text-success">${upProb.toFixed(1)}%</span>`;
+    html += `</div>`;
+    html += `<div class="progress"><div class="progress-bar bg-success" style="width: ${upProb}%"></div></div>`;
+    html += `</div>`;
+    
+    html += `<div class="mb-3">`;
+    html += `<div class="d-flex justify-content-between mb-1">`;
+    html += `<span>下跌概率</span><span class="text-danger">${downProb.toFixed(1)}%</span>`;
+    html += `</div>`;
+    html += `<div class="progress"><div class="progress-bar bg-danger" style="width: ${downProb}%"></div></div>`;
+    html += `</div>`;
+    
+    html += `<div class="mb-3">`;
+    html += `<div class="d-flex justify-content-between mb-1">`;
+    html += `<span>横盘概率</span><span class="text-warning">${sidewaysProb.toFixed(1)}%</span>`;
+    html += `</div>`;
+    html += `<div class="progress"><div class="progress-bar bg-warning" style="width: ${sidewaysProb}%"></div></div>`;
+    html += `</div>`;
+    
+    html += `<hr>`;
+    html += `<p class="mb-1"><strong>预测置信度:</strong> ${confidence.toFixed(1)}%</p>`;
+    
+    if (prob.price_targets) {
+        const targets = prob.price_targets;
+        html += `<p class="mb-1"><strong>上涨目标:</strong> ¥${(targets.up_target || 0).toFixed(2)}</p>`;
+        html += `<p class="mb-1"><strong>下跌目标:</strong> ¥${(targets.down_target || 0).toFixed(2)}</p>`;
+        html += `<p class="mb-0"><strong>预期变动:</strong> ${(targets.expected_move || 0).toFixed(2)}%</p>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// 更新趋势分析
+function updateTrend(trend, indicators) {
+    const container = document.getElementById('trendSection');
+    
+    if (!trend) {
+        container.innerHTML = '<p class="text-muted">暂无趋势数据</p>';
+        return;
+    }
+    
+    let html = '<div class="row">';
+    
+    // 短期趋势
+    html += `
+        <div class="col-md-4 text-center border-end">
+            <h5 class="mb-2">短期趋势 <small class="text-muted">(MA5/20日)</small></h5>
+            <div id="miniChartShort" style="height:70px;"></div>
+            <div id="shortTrendDetails" class="mt-2 small"></div>
+            <div id="shortTrendLabel" class="mt-1"></div>
+        </div>
+    `;
+    
+    // 中期趋势
+    html += `
+        <div class="col-md-4 text-center border-end">
+            <h5 class="mb-2">中期趋势 <small class="text-muted">(MA20/90日)</small></h5>
+            <div id="miniChartMid" style="height:70px;"></div>
+            <div id="midTrendDetails" class="mt-2 small"></div>
+            <div id="midTrendLabel" class="mt-1"></div>
+        </div>
+    `;
+    
+    // 长期趋势
+    html += `
+        <div class="col-md-4 text-center">
+            <h5 class="mb-2">长期趋势 <small class="text-muted">(MA60/500日)</small></h5>
+            <div id="miniChartLong" style="height:70px;"></div>
+            <div id="longTrendDetails" class="mt-2 small"></div>
+            <div id="longTrendLabel" class="mt-1"></div>
+        </div>
+    `;
+    
+    html += '</div>';
+    
+    container.innerHTML = html;
+    
+    // 加载迷你趋势图
+    loadMiniTrendCharts();
+}
+
+// 加载迷你趋势图
+async function loadMiniTrendCharts() {
+    try {
+        // 获取500天日线数据
+        const response = await axios.get(`/api/kline/${tsCode}?freq=D&limit=500`);
+        if (!response.data.success) return;
+        
+        const data = response.data.data;
+        if (data.length === 0) return;
+        
+        const formatDate = (dateStr) => {
+            if (!dateStr || dateStr.length !== 8) return dateStr;
+            return dateStr.substring(0, 4) + '-' + dateStr.substring(4, 6) + '-' + dateStr.substring(6, 8);
+        };
+        
+        const allDates = data.map(d => formatDate(d.trade_date));
+        const allCloses = data.map(d => d.close);
+        
+        const calculateMA = (data, period) => {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < period - 1) { result.push(null); }
+                else {
+                    let sum = 0;
+                    for (let j = 0; j < period; j++) sum += data[i - j];
+                    result.push(sum / period);
+                }
+            }
+            return result;
+        };
+        
+        // 计算均线斜率（最后5天的变化百分比）
+        const calculateSlope = (maData) => {
+            const validData = maData.filter(v => v !== null);
+            if (validData.length < 5) return 0;
+            const last5 = validData.slice(-5);
+            const change = (last5[4] - last5[0]) / last5[0] * 100;
+            return change;
+        };
+        
+        // 根据斜率判断趋势层级（用箭头数量和方向表示）
+        const getTrendLevel = (slope) => {
+            const absSlope = Math.abs(slope);
+            const isUp = slope >= 0;
+            
+            // 确定箭头数量（根据斜率绝对值）
+            let arrowCount = 1;
+            if (absSlope >= 7.0) arrowCount = 5;
+            else if (absSlope >= 5.0) arrowCount = 4;
+            else if (absSlope >= 3.0) arrowCount = 3;
+            else if (absSlope >= 1.0) arrowCount = 2;
+            // else: absSlope < 1.0 → arrowCount = 1
+            
+            // 生成箭头符号
+            const arrowSymbol = isUp ? '↑' : '↓';
+            const arrows = arrowSymbol.repeat(arrowCount);
+            
+            // 根据方向返回结果
+            return isUp 
+                ? { text: '上扬', arrows: arrows, class: 'text-success', badge: 'bg-success' }
+                : { text: '下跌', arrows: arrows, class: 'text-danger', badge: 'bg-danger' };
+        };
+        
+        // 格式化斜率显示
+        const formatSlope = (slope) => {
+            const sign = slope >= 0 ? '+' : '';
+            return `<span class="${slope > 0 ? 'text-success' : slope < 0 ? 'text-danger' : 'text-muted'}">${sign}${slope.toFixed(2)}%</span>`;
+        };
+        
+        const miniLayout = () => ({
+            margin: { l: 40, r: 10, t: 5, b: 25 },
+            height: 70,
+            xaxis: { type: 'category', showticklabels: false },
+            yaxis: { showticklabels: false, showgrid: false },
+            showlegend: false
+        });
+        
+        // 短期趋势：最近20天 + MA5
+        const shortCloses = allCloses.slice(-20);
+        const shortDates = allDates.slice(-20);
+        const shortMA5 = calculateMA(allCloses, 5).slice(-20);
+        const shortStart = shortCloses[0], shortEnd = shortCloses[shortCloses.length - 1];
+        const shortChange = ((shortEnd - shortStart) / shortStart * 100).toFixed(2);
+        const shortSlope = calculateSlope(shortMA5);
+        
+        Plotly.newPlot('miniChartShort', [
+            { x: shortDates, y: shortCloses, type: 'scatter', mode: 'lines', line: { color: '#d1d5db', width: 1 } },
+            { x: shortDates, y: shortMA5, type: 'scatter', mode: 'lines', line: { color: '#3b82f6', width: 2.5 } }
+        ], miniLayout());
+        
+        const shortTrendLevel = getTrendLevel(shortSlope);
+        document.getElementById('shortTrendDetails').innerHTML = `
+            <div class="row g-0">
+                <div class="col-4"><small class="text-muted">期初</small><br><small>¥${shortStart.toFixed(2)}</small></div>
+                <div class="col-4"><small class="text-muted">期末</small><br><small>¥${shortEnd.toFixed(2)}</small></div>
+                <div class="col-4"><small class="text-muted">MA斜率</small><br><small>${formatSlope(shortSlope)}</small></div>
+            </div>
+        `;
+        document.getElementById('shortTrendLabel').innerHTML = `
+            <span class="badge ${shortTrendLevel.badge}" style="font-size: 4rem; padding: 0.5rem 1rem; line-height: 1;">${shortTrendLevel.arrows}</span>
+        `;
+        
+        // 中期趋势：最近90天 + MA20
+        const midCloses = allCloses.slice(-90);
+        const midDates = allDates.slice(-90);
+        const midMA20 = calculateMA(allCloses, 20).slice(-90);
+        const midStart = midCloses[0], midEnd = midCloses[midCloses.length - 1];
+        const midSlope = calculateSlope(midMA20);
+        const midTrendLevel = getTrendLevel(midSlope);
+        
+        Plotly.newPlot('miniChartMid', [
+            { x: midDates, y: midCloses, type: 'scatter', mode: 'lines', line: { color: '#d1d5db', width: 1 } },
+            { x: midDates, y: midMA20, type: 'scatter', mode: 'lines', line: { color: '#f97316', width: 2.5 } }
+        ], miniLayout());
+        
+        document.getElementById('midTrendDetails').innerHTML = `
+            <div class="row g-0">
+                <div class="col-4"><small class="text-muted">期初</small><br><small>¥${midStart.toFixed(2)}</small></div>
+                <div class="col-4"><small class="text-muted">期末</small><br><small>¥${midEnd.toFixed(2)}</small></div>
+                <div class="col-4"><small class="text-muted">MA斜率</small><br><small>${formatSlope(midSlope)}</small></div>
+            </div>
+        `;
+        document.getElementById('midTrendLabel').innerHTML = `
+            <span class="badge ${midTrendLevel.badge}" style="font-size: 4rem; padding: 0.5rem 1rem; line-height: 1;">${midTrendLevel.arrows}</span>
+        `;
+        
+        // 长期趋势：全部500天 + MA60
+        const longMA60 = calculateMA(allCloses, 60);
+        const longStart = allCloses[0], longEnd = allCloses[allCloses.length - 1];
+        const longSlope = calculateSlope(longMA60);
+        const longTrendLevel = getTrendLevel(longSlope);
+        
+        Plotly.newPlot('miniChartLong', [
+            { x: allDates, y: allCloses, type: 'scatter', mode: 'lines', line: { color: '#d1d5db', width: 1 } },
+            { x: allDates, y: longMA60, type: 'scatter', mode: 'lines', line: { color: '#ec4899', width: 2.5 } }
+        ], miniLayout());
+        
+        document.getElementById('longTrendDetails').innerHTML = `
+            <div class="row g-0">
+                <div class="col-4"><small class="text-muted">期初</small><br><small>¥${longStart.toFixed(2)}</small></div>
+                <div class="col-4"><small class="text-muted">期末</small><br><small>¥${longEnd.toFixed(2)}</small></div>
+                <div class="col-4"><small class="text-muted">MA斜率</small><br><small>${formatSlope(longSlope)}</small></div>
+            </div>
+        `;
+        document.getElementById('longTrendLabel').innerHTML = `
+            <span class="badge ${longTrendLevel.badge}" style="font-size: 4rem; padding: 0.5rem 1rem; line-height: 1;">${longTrendLevel.arrows}</span>
+        `;
+        
+    } catch (error) {
+        console.error('加载迷你趋势图失败:', error);
+    }
+}
+
+// 更新技术指标
+function updateIndicators(indicators) {
+    const container = document.getElementById('indicatorsSection');
+    
+    if (!indicators) {
+        container.innerHTML = '<p class="text-muted">暂无技术指标数据</p>';
+        return;
+    }
+    
+    let html = '<div class="row">';
+    
+    // RSI
+    const rsi = indicators.rsi || 50;
+    const rsiClass = rsi > 70 ? 'text-danger' : rsi < 30 ? 'text-success' : 'text-muted';
+    html += `<div class="col-6 mb-3">`;
+    html += `<div class="indicator-badge bg-light">`;
+    html += `<span>RSI</span><strong class="${rsiClass}">${rsi ? rsi.toFixed(2) : '-'}</strong>`;
+    html += `</div></div>`;
+    
+    // MACD
+    const macdHist = indicators.macd && indicators.macd.hist ? indicators.macd.hist : 0;
+    html += `<div class="col-6 mb-3">`;
+    html += `<div class="indicator-badge bg-light">`;
+    html += `<span>MACD</span><strong>${macdHist.toFixed(2)}</strong>`;
+    html += `</div></div>`;
+    
+    // KDJ
+    const kdjK = indicators.kdj && indicators.kdj.k ? indicators.kdj.k : 0;
+    html += `<div class="col-6 mb-3">`;
+    html += `<div class="indicator-badge bg-light">`;
+    html += `<span>KDJ-K</span><strong>${kdjK.toFixed(2)}</strong>`;
+    html += `</div></div>`;
+    
+    // ATR
+    const atr = indicators.atr || 0;
+    html += `<div class="col-6 mb-3">`;
+    html += `<div class="indicator-badge bg-light">`;
+    html += `<span>ATR</span><strong>${atr.toFixed(2)}</strong>`;
+    html += `</div></div>`;
+    
+    // 布林带
+    if (indicators.bollinger) {
+        const boll = indicators.bollinger;
+        html += `<div class="col-12">`;
+        html += `<hr>`;
+        html += `<h6>布林带</h6>`;
+        html += `<div class="d-flex justify-content-between">`;
+        html += `<span>上轨: ${(boll.upper || 0).toFixed(2)}</span>`;
+        html += `<span>中轨: ${(boll.mid || 0).toFixed(2)}</span>`;
+        html += `<span>下轨: ${(boll.lower || 0).toFixed(2)}</span>`;
+        html += `</div>`;
+        html += `</div>`;
+    }
+    
+    // 量比
+    const volumeRatio = indicators.volume_ratio || 0;
+    html += `<div class="col-12 mt-3">`;
+    html += `<div class="indicator-badge bg-light">`;
+    html += `<span>量比</span><strong>${volumeRatio.toFixed(2)}</strong>`;
+    html += `</div></div>`;
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 更新战法匹配
+function updateStrategies(strategies) {
+    const container = document.getElementById('strategiesSection');
+    
+    if (!strategies.matched_strategies || strategies.matched_strategies.length === 0) {
+        container.innerHTML = '<p class="text-muted">当前无明显战法信号</p>';
+        return;
+    }
+    
+    let html = '';
+    strategies.matched_strategies.forEach(strategy => {
+        const signalClass = strategy.signal === 'buy' ? 'border-success' : strategy.signal === 'sell' ? 'border-danger' : 'border-warning';
+        const signalIcon = strategy.signal === 'buy' ? 'fa-arrow-up text-success' : strategy.signal === 'sell' ? 'fa-arrow-down text-danger' : 'fa-minus text-warning';
+        
+        html += `<div class="strategy-item ${signalClass}">`;
+        html += `<div class="d-flex justify-content-between align-items-start">`;
+        html += `<div>`;
+        html += `<h6 class="mb-1"><i class="fas ${signalIcon} me-2"></i>${strategy.name}</h6>`;
+        html += `<p class="mb-1 small text-muted">${strategy.description}</p>`;
+        html += `</div>`;
+        html += `<span class="badge bg-primary">${strategy.confidence}%</span>`;
+        html += `</div>`;
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// 更新海龟交易
+function updateTurtle(turtle) {
+    const container = document.getElementById('turtleSection');
+    
+    if (!turtle) {
+        container.innerHTML = '<p class="text-muted">暂无海龟交易信号</p>';
+        return;
+    }
+    
+    if (turtle.error) {
+        container.innerHTML = `<div class="alert alert-warning">${turtle.error}</div>`;
+        return;
+    }
+    
+    let html = '<div class="row">';
+    
+    html += `<div class="col-md-4">`;
+    html += `<h6>当前信号</h6>`;
+    const direction = turtle.direction || 'none';
+    if (direction && direction !== 'none') {
+        const signalClass = direction === 'long' ? 'text-success' : 'text-danger';
+        const signalText = direction === 'long' ? '多头信号' : '空头信号';
+        html += `<p class="${signalClass}"><i class="fas fa-signal me-2"></i><strong>${signalText}</strong></p>`;
+        html += `<p class="mb-1">入场价: ¥${(turtle.entry_price || 0).toFixed(2)}</p>`;
+        html += `<p class="mb-1">止损价: ¥${(turtle.stop_loss || 0).toFixed(2)}</p>`;
+        html += `<p class="mb-0">建议仓位: ${turtle.unit_size || 0}股</p>`;
+    } else {
+        html += `<p class="text-muted"><i class="fas fa-pause me-2"></i>无明确信号，建议观望</p>`;
+        if (turtle.watch_levels) {
+            html += `<p class="mb-1 small">多头入场: ¥${(turtle.watch_levels.long_entry || 0).toFixed(2)}</p>`;
+            html += `<p class="mb-0 small">空头入场: ¥${(turtle.watch_levels.short_entry || 0).toFixed(2)}</p>`;
+        }
+    }
+    html += `</div>`;
+    
+    html += `<div class="col-md-8">`;
+    html += `<h6>策略说明</h6>`;
+    html += `<p class="text-muted">${turtle.description || '基于唐奇安通道突破系统，结合ATR进行仓位管理'}</p>`;
+    
+    if (turtle.add_positions && turtle.add_positions.length > 0) {
+        html += `<h6>加仓点位</h6>`;
+        html += `<div class="d-flex gap-2">`;
+        turtle.add_positions.forEach((price, index) => {
+            html += `<span class="badge bg-secondary">第${index + 1}加仓: ¥${(price || 0).toFixed(2)}</span>`;
+        });
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+// 加载股东户数数据
+async function loadHolderNumber() {
+    try {
+        const response = await axios.get(`/api/holder_number/${tsCode}`);
+        const container = document.getElementById('holderSection');
+        
+        if (!response.data.success || !response.data.data || response.data.data.length === 0) {
+            container.innerHTML = '<p class="text-muted">暂无股东户数数据</p>';
+            return;
+        }
+        
+        const data = response.data.data;
+        const latest = data[data.length - 1];
+        const prev = data.length >= 2 ? data[data.length - 2] : null;
+        
+        // 格式化日期 '20260518' -> '2026-05-18'
+        const fmtDate = (d) => {
+            if (!d || d.length !== 8) return d;
+            return d.substring(0, 4) + '-' + d.substring(4, 6) + '-' + d.substring(6, 8);
+        };
+        
+        // 计算变化
+        let changeHtml = '';
+        if (prev && prev.holder_num > 0) {
+            const change = latest.holder_num - prev.holder_num;
+            const changePct = ((change / prev.holder_num) * 100).toFixed(2);
+            const isDown = change < 0;
+            const colorClass = isDown ? 'text-success' : 'text-danger';
+            const arrow = isDown ? '↓' : '↑';
+            const desc = isDown ? '筹码集中' : '筹码分散';
+            changeHtml = `
+                <div class="col-md-4 text-center">
+                    <h3 class="${colorClass}">${arrow} ${Math.abs(change).toLocaleString()}</h3>
+                    <small class="text-muted">较上期变化 (${changePct}%)</small>
+                    <br><small class="${colorClass}">${desc}</small>
+                </div>
+            `;
+        }
+        
+        // 户均持股金额
+        let avgAmountHtml = '';
+        if (latest.avg_hold_amount && latest.avg_hold_amount > 0) {
+            avgAmountHtml = `
+                <div class="col-md-4 text-center">
+                    <h3>¥${latest.avg_hold_amount.toLocaleString()}</h3>
+                    <small class="text-muted">户均持股金额</small>
+                </div>
+            `;
+        }
+        
+        // 历史趋势图表
+        const dates = data.map(d => fmtDate(d.end_date));
+        const holderNums = data.map(d => d.holder_num);
+        
+        const holderTrace = {
+            x: dates,
+            y: holderNums,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: '股东户数',
+            line: { color: '#6366f1', width: 2 },
+            marker: { size: 6 }
+        };
+        
+        const holderLayout = {
+            margin: { l: 60, r: 20, t: 10, b: 40 },
+            height: 250,
+            xaxis: {
+                type: 'category',
+                tickangle: -45,
+                nticks: 6
+            },
+            yaxis: {
+                title: '股东户数(户)',
+                rangemode: 'tozero'
+            },
+            showlegend: false
+        };
+        
+        container.innerHTML = `
+            <div class="row mb-3">
+                <div class="col-md-4 text-center">
+                    <h3>${latest.holder_num.toLocaleString()}</h3>
+                    <small class="text-muted">最新股东户数 (${fmtDate(latest.end_date)})</small>
+                </div>
+                ${changeHtml}
+                ${avgAmountHtml}
+            </div>
+            <div id="holderChart"></div>
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    股东户数减少 → 筹码集中 → 可能有大资金（机构）在吸筹；
+                    股东户数增加 → 筹码分散 → 可能有大资金在出货。
+                </small>
+            </div>
+        `;
+        
+        Plotly.newPlot('holderChart', [holderTrace], holderLayout, { responsive: true });
+    } catch (error) {
+        console.error('加载股东户数数据失败:', error);
+        document.getElementById('holderSection').innerHTML = '<p class="text-muted">加载股东户数数据失败</p>';
+    }
+}
+
+// 加载K线图表
+async function loadKlineChart() {
+    try {
+        const response = await axios.get(`/api/kline/${tsCode}?freq=D&limit=200`);
+        if (response.data.success) {
+            renderKlineChart(response.data.data);
+        }
+    } catch (error) {
+        console.error('加载K线数据失败:', error);
+    }
+}
+
+// 渲染K线图表
+function renderKlineChart(data) {
+    // 转换日期格式 '20260518' -> '2026-05-18'
+    const formatDate = (dateStr) => {
+        if (!dateStr || dateStr.length !== 8) return dateStr;
+        return dateStr.substring(0, 4) + '-' + dateStr.substring(4, 6) + '-' + dateStr.substring(6, 8);
+    };
+    
+    const dates = data.map(d => formatDate(d.trade_date));
+    const opens = data.map(d => d.open);
+    const highs = data.map(d => d.high);
+    const lows = data.map(d => d.low);
+    const closes = data.map(d => d.close);
+    const volumes = data.map(d => d.volume);
+    
+    // 计算均线
+    const calculateMA = (data, period) => {
+        const result = [];
+        for (let i = 0; i < data.length; i++) {
+            if (i < period - 1) {
+                result.push(null);
+            } else {
+                let sum = 0;
+                for (let j = 0; j < period; j++) {
+                    sum += data[i - j];
+                }
+                result.push(sum / period);
+            }
+        }
+        return result;
+    };
+    
+    // 计算布林带
+    const calculateBollingerBands = (data, period = 20, multiplier = 2) => {
+        const middle = calculateMA(data, period);
+        const upper = [];
+        const lower = [];
+        
+        for (let i = 0; i < data.length; i++) {
+            if (i < period - 1) {
+                upper.push(null);
+                lower.push(null);
+            } else {
+                let sum = 0;
+                for (let j = 0; j < period; j++) {
+                    sum += Math.pow(data[i - j] - middle[i], 2);
+                }
+                const std = Math.sqrt(sum / period);
+                upper.push(middle[i] + multiplier * std);
+                lower.push(middle[i] - multiplier * std);
+            }
+        }
+        return { upper, middle, lower };
+    };
+    
+    // 计算RSI (参数: 14)
+    const calculateRSI = (data, period = 14) => {
+        const result = [];
+        for (let i = 0; i < data.length; i++) {
+            if (i < period) {
+                result.push(null);
+            } else {
+                let gains = 0, losses = 0;
+                for (let j = 0; j < period; j++) {
+                    const change = data[i - j] - data[i - j - 1];
+                    if (change > 0) gains += change;
+                    else losses -= change;
+                }
+                const avgGain = gains / period;
+                const avgLoss = losses / period;
+                if (avgLoss === 0) result.push(100);
+                else {
+                    const rs = avgGain / avgLoss;
+                    result.push(100 - (100 / (1 + rs)));
+                }
+            }
+        }
+        return result;
+    };
+    
+    // 计算KDJ (参数: 9,3,3)
+    const calculateKDJ = (highs, lows, closes, n = 9, m1 = 3, m2 = 3) => {
+        const K = [], D = [], J = [];
+        let prevK = 50, prevD = 50;
+        
+        for (let i = 0; i < closes.length; i++) {
+            if (i < n - 1) {
+                K.push(null);
+                D.push(null);
+                J.push(null);
+            } else {
+                let highest = highs[i], lowest = lows[i];
+                for (let j = 1; j < n; j++) {
+                    highest = Math.max(highest, highs[i - j]);
+                    lowest = Math.min(lowest, lows[i - j]);
+                }
+                const rsv = highest === lowest ? 0 : (closes[i] - lowest) / (highest - lowest) * 100;
+                const k = (m1 - 1) / m1 * prevK + 1 / m1 * rsv;
+                const d = (m2 - 1) / m2 * prevD + 1 / m2 * k;
+                const j = 3 * k - 2 * d;
+                K.push(k);
+                D.push(d);
+                J.push(j);
+                prevK = k;
+                prevD = d;
+            }
+        }
+        return { K, D, J };
+    };
+    
+    // 计算MACD (参数: 12,26,9)
+    const calculateMACD = (data, fast = 12, slow = 26, signal = 9) => {
+        const ema = (data, period) => {
+            const result = [];
+            const multiplier = 2 / (period + 1);
+            for (let i = 0; i < data.length; i++) {
+                if (i === 0) result.push(data[i]);
+                else result.push((data[i] - result[i - 1]) * multiplier + result[i - 1]);
+            }
+            return result;
+        };
+        
+        const emaFast = ema(data, fast);
+        const emaSlow = ema(data, slow);
+        const dif = emaFast.map((v, i) => v - emaSlow[i]);
+        const dea = ema(dif, signal);
+        const macd = dif.map((v, i) => (v - dea[i]) * 2);
+        
+        return { dif, dea, macd };
+    };
+    
+    const ma5 = calculateMA(closes, 5);
+    const ma20 = calculateMA(closes, 20);
+    const ma60 = calculateMA(closes, 60);
+    const boll = calculateBollingerBands(closes, 20);
+    const rsi = calculateRSI(closes, 14);
+    const kdj = calculateKDJ(highs, lows, closes, 9, 3, 3);
+    const macd = calculateMACD(closes, 12, 26, 9);
+    
+    // K线
+    const trace = {
+        x: dates,
+        open: opens,
+        high: highs,
+        low: lows,
+        close: closes,
+        type: 'candlestick',
+        name: 'K线',
+        increasing: { line: { color: '#10b981' } },
+        decreasing: { line: { color: '#ef4444' } }
+    };
+    
+    // 5日均线（蓝色）
+    const ma5Trace = {
+        x: dates,
+        y: ma5,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'MA5',
+        line: { color: '#3b82f6', width: 1.5 }
+    };
+    
+    // 20日均线（橘色）
+    const ma20Trace = {
+        x: dates,
+        y: ma20,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'MA20',
+        line: { color: '#f97316', width: 1.5 }
+    };
+    
+    // 60日均线（粉红色）
+    const ma60Trace = {
+        x: dates,
+        y: ma60,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'MA60',
+        line: { color: '#ec4899', width: 1.5 }
+    };
+    
+    // 布林带上轨（灰色）
+    const bollUpperTrace = {
+        x: dates,
+        y: boll.upper,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'BOLL上轨',
+        line: { color: '#9ca3af', width: 1 },
+        hoverinfo: 'skip'
+    };
+    
+    // 布林带下轨（灰色）
+    const bollLowerTrace = {
+        x: dates,
+        y: boll.lower,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'BOLL下轨',
+        line: { color: '#9ca3af', width: 1 },
+        fill: 'tonexty',
+        fillcolor: 'rgba(156, 163, 175, 0.1)',
+        hoverinfo: 'skip'
+    };
+    
+    // 成交量
+    const volumeTrace = {
+        x: dates,
+        y: volumes,
+        type: 'bar',
+        name: '成交量',
+        yaxis: 'y2',
+        marker: {
+            color: closes.map((close, i) => close >= opens[i] ? '#10b981' : '#ef4444')
+        }
+    };
+    
+    // RSI (参数: 14)
+    const rsiTrace = {
+        x: dates,
+        y: rsi,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'RSI',
+        yaxis: 'y3',
+        line: { color: '#8b5cf6', width: 1.5 }
+    };
+    
+    // KDJ K线 (参数: 9,3,3)
+    const kTrace = {
+        x: dates,
+        y: kdj.K,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'K',
+        yaxis: 'y4',
+        line: { color: '#06b6d4', width: 1.5 }
+    };
+    
+    const dTrace = {
+        x: dates,
+        y: kdj.D,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'D',
+        yaxis: 'y4',
+        line: { color: '#f59e0b', width: 1.5 }
+    };
+    
+    const jTrace = {
+        x: dates,
+        y: kdj.J,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'J',
+        yaxis: 'y4',
+        line: { color: '#ef4444', width: 1 }
+    };
+    
+    // MACD (参数: 12,26,9)
+    const difTrace = {
+        x: dates,
+        y: macd.dif,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'DIF',
+        yaxis: 'y5',
+        line: { color: '#3b82f6', width: 1.5 }
+    };
+    
+    const deaTrace = {
+        x: dates,
+        y: macd.dea,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'DEA',
+        yaxis: 'y5',
+        line: { color: '#f97316', width: 1.5 }
+    };
+    
+    const macdBarTrace = {
+        x: dates,
+        y: macd.macd,
+        type: 'bar',
+        name: 'MACD柱',
+        yaxis: 'y5',
+        marker: {
+            color: macd.macd.map(v => v >= 0 ? '#ef4444' : '#10b981')
+        }
+    };
+    
+    const layout = {
+        title: `${tsCode} K线图`,
+        grid: {
+            rows: 5,
+            columns: 1,
+            pattern: 'coupled',
+            roworder: 'top to bottom'
+        },
+        yaxis: {
+            title: '价格',
+            domain: [0.72, 1]
+        },
+        yaxis2: {
+            title: '成交量',
+            domain: [0.58, 0.70]
+        },
+        yaxis3: {
+            title: 'RSI(14)',
+            domain: [0.44, 0.56],
+            range: [0, 100]
+        },
+        yaxis4: {
+            title: 'KDJ(9,3,3)',
+            domain: [0.30, 0.42],
+            range: [-20, 120]
+        },
+        yaxis5: {
+            title: 'MACD(12,26,9)',
+            domain: [0, 0.28]
+        },
+        xaxis: {
+            rangeslider: { visible: false },
+            type: 'category',
+            tickangle: -45,
+            nticks: 10
+        },
+        showlegend: true,
+        legend: {
+            x: 0,
+            y: 1.02,
+            orientation: 'h'
+        },
+        height: 1170,
+        margin: { l: 60, r: 60, t: 60, b: 80 }
+    };
+    
+    Plotly.newPlot('klineChart', [
+        trace, bollUpperTrace, bollLowerTrace, ma5Trace, ma20Trace, ma60Trace, 
+        volumeTrace, rsiTrace, kTrace, dTrace, jTrace, difTrace, deaTrace, macdBarTrace
+    ], layout, { responsive: true });
+}
+
+// 显示错误
+function showError(message) {
+    document.querySelectorAll('.loading').forEach(el => {
+        el.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+    });
+}
+</script>
+{% endblock %}
+
+

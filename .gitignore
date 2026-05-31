@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# 数据库（包含敏感数据）
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 报告和数据输出
+reports/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Flask
+instance/.gitkeep
