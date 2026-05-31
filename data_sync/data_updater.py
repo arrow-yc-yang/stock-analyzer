@@ -290,4 +290,7 @@ class DataUpdater:
                 
             except Exception as e:
                 logger.error(f"同步自定义股票 {ts_code} 失败: {e}")
-                db.se
+                db.session.rollback()
+                continue
+        
+        logger.info("自定义股票列表同步完成")

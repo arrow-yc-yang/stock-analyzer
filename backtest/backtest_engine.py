@@ -341,4 +341,6 @@ class BacktestEngine:
         return {
             'strategy': strategy_name,
             'stocks_tested': len(all_results),
-           
+            'avg_return': round(total_return, 2),
+            'individual_results': all_results
+        }
