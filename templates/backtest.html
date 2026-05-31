@@ -363,15 +363,4 @@ function displayComparisonResults(data) {
         
         html += `<tr>
             <td><strong>${strategy}</strong></td>
-            <td class="${returnClass}">${result.total_return >= 0 ? '+' : ''}${result.total_return.toFixed(2)}%</td>
-            <td>${result.win_rate.toFixed(1)}%</td>
-            <td class="text-danger">${result.max_drawdown.toFixed(2)}%</td>
-            <td>${result.total_trades}</td>
-            <td>${result.profit_factor.toFixed(2)}</td>
-        </tr>`;
-    });
-    
-    tbody.innerHTML = html;
-}
-</script>
-{% endblock %}
+            <td class="${returnClass}">${result.total_return >= 

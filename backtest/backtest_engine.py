@@ -333,14 +333,4 @@ class BacktestEngine:
         total_return = 0
         
         for ts_code, df in stock_data_dict.items():
-            result = self.backtest_strategy(df, strategy_name)
-            if 'error' not in result:
-                all_results[ts_code] = result
-                total_return += result.get('total_return', 0) / n_stocks
         
-        return {
-            'strategy': strategy_name,
-            'stocks_tested': len(all_results),
-            'avg_return': round(total_return, 2),
-            'individual_results': all_results
-        }

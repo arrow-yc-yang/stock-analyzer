@@ -386,14 +386,4 @@ class StrategyMatcher:
         up_trend = flagpole['close'].iloc[-1] > flagpole['close'].iloc[0] * 1.1
         consolidation = flag['high'].max() < flagpole['high'].max() and flag['low'].min() > flagpole['low'].min()
         
-        if up_trend and consolidation:
-            latest = df.iloc[-1]
-            if latest['close'] > flag['high'].max():
-                return {
-                    'matched': True,
-                    'signal': 'buy',
-                    'description': '上升旗形突破，趋势延续',
-                    'confidence': 75
-                }
-        
-        return {'matched': False}
+      

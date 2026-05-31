@@ -44,5 +44,4 @@ API_PORT = 5000
 API_DEBUG = False
 
 # 报告配置
-REPORT_OUTPUT_DIR = "reports"
-REPORT_FORMATS = ["html", "pdf"]
+REPORT_OUTPUT_DIR

@@ -341,12 +341,4 @@ class RecommendationEngine:
         
         # 概率警告
         confidence = probability_result.get('confidence', 50)
-        if confidence < 50:
-            warnings.append('预测置信度较低，建议观望')
-        
-        # 趋势警告
-        trend = analysis_result.get('trend', {})
-        if trend.get('short_trend') != trend.get('mid_trend'):
-            warnings.append('短期与中期趋势不一致，注意震荡风险')
-        
-        return warnings
+        if co

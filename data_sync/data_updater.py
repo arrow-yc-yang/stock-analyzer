@@ -282,15 +282,4 @@ class DataUpdater:
                             list_date=str(info.get('list_date', '')),
                             is_custom=True,
                             stock_type='stock'
-                        )
-                        db.session.add(stock)
-                
-                db.session.commit()
-                time.sleep(0.1)
-                
-            except Exception as e:
-                logger.error(f"同步自定义股票 {ts_code} 失败: {e}")
-                db.session.rollback()
-                continue
-        
-        logger.info("自定义股票列表同步完成")
+                       

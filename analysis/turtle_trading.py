@@ -340,14 +340,4 @@ class TurtleTrading:
         
         else:
             recommendation['action'] = 'wait'
-            recommendation['description'] = '无明确信号，等待突破'
-            
-            # 提供观察价位
-            latest = df.iloc[-1]
-            recommendation['watch_levels'] = {
-                'long_entry': latest.get('DC_UPPER'),
-                'short_entry': latest.get('DC_LOWER'),
-                'current_atr': signal['atr']
-            }
-        
-        return recommendation
+            recommendation['description'] = '无明确信号，等�

@@ -202,11 +202,4 @@ def main():
         analyze_stock(args.code)
     elif args.command == 'backtest':
         if not args.code:
-            print("请使用 --code 指定股票代码")
-            sys.exit(1)
-        backtest_stock(args.code, args.strategy)
-    elif args.command == 'report':
-        generate_report()
-
-if __name__ == '__main__':
-    main()
+            print("请使�
