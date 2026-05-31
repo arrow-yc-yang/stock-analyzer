@@ -44,5 +44,3 @@ ehthumbs.db
 
 # Flask
 instance/.gitkeep
-models/__init__.py
-models/factor_data.py
