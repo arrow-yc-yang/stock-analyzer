@@ -337,4 +337,14 @@ class ProbabilityPredictor:
                 'description': '基准情景',
                 'probability': 50,
                 'price_change': f"{base_prediction['price_targets']['expected_move']}%",
-                'conditions': '按当前趋势和技术面正常发展
+                'conditions': '按当前趋势和技术面正常发展'
+            },
+            'bearish': {
+                'description': '悲观情景',
+                'probability': base_prediction['down_probability'] * 1.2,
+                'price_change': '-5% ~ -10%',
+                'conditions': '市场情绪转差或出现利空消息'
+            }
+        }
+        
+        return scenarios

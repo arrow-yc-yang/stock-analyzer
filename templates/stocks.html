@@ -158,4 +158,11 @@ async function removeFromCustom(tsCode) {
             loadStocks(); // 刷新列表
         } else {
             alert(response.data.error || '移除失败');
- 
+        }
+    } catch (error) {
+        console.error('移除自选失败:', error);
+        alert('移除失败，请重试');
+    }
+}
+</script>
+{% endblock %}

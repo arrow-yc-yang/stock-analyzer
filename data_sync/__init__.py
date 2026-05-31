@@ -4,4 +4,4 @@
 from .tushare_client import TushareClient
 from .data_updater import DataUpdater
 
-__all__ = ['TushareClient', 'DataUpda
+__all__ = ['TushareClient', 'DataUpdater']

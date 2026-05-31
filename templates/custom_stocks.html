@@ -283,4 +283,18 @@ function renderBatchResults(results) {
             <td>
                 <a href="/analysis/${item.stock.ts_code}" class="btn btn-sm btn-primary">详情</a>
             </td>
-   
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchAndAdd();
+    }
+});
+</script>
+{% endblock %}

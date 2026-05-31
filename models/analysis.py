@@ -108,3 +108,6 @@ class AnalysisResult(db.Model):
                 'entry_price': self.turtle_entry_price,
                 'stop_price': self.turtle_stop_price,
                 'unit_size': self.turtle_unit_size
+            },
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }

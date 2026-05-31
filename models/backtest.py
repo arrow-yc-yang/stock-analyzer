@@ -62,4 +62,5 @@ class BacktestResult(db.Model):
             'avg_loss': self.avg_loss,
             'profit_factor': self.profit_factor,
             'trade_records': self.trade_records,
-            'created_at': sel
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }

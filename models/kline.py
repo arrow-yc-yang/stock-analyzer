@@ -52,3 +52,5 @@ class KLineData(db.Model):
             'volume': self.volume,
             'amount': self.amount,
             'change': self.change,
+            'pct_change': self.pct_change
+        }

@@ -43,4 +43,5 @@ class Stock(db.Model):
             'is_custom': self.is_custom,
             'stock_type': self.stock_type,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isofor
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }

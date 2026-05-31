@@ -259,4 +259,15 @@ async function syncKline() {
             statusDiv.innerHTML = `<div class="alert alert-danger">${response.data.error}</div>`;
         }
     } catch (error) {
-        statusDiv.innerHTML = 
+        statusDiv.innerHTML = '<div class="alert alert-danger">同步失败，请重试</div>';
+    }
+}
+
+// 回车搜索
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchStocks();
+    }
+});
+</script>
+{% endblock %}
